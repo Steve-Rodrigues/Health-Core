@@ -10,17 +10,21 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID #this is the true UUID
 
 Base = declarative_base() #creates the Base call to put in the table class parameters so it knows it is a orm table
 
+#Stores all info about each user including goals they made from our onboarding survey
 class User(Base):
     __tablename__ = 'users'
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True) #id is set to the one from supabase
     username: Mapped[str] = mapped_column(String(30), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
+    current_weight: Mapped[float] = mapped_column(Float(), nullable=True)
+    goal_weight: Mapped[float] = mapped_column(Float(), nullable=True)
+    workouts_per_week_goal: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    sleep_goal: Mapped[float] = mapped_column(Float(), nullable=True)
     #one-to-many sides of the relationships-- cascade lives here on the parent so deleting a user deletes their rows too
     workouts: Mapped[list["Workout"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     meals: Mapped[list["Meal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
-    goals: Mapped[list["User_Goal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    nutrition_goals: Mapped[list["User_Goal_Nutrition"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     sleeps: Mapped[list["Sleep"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
 
 #********* Lifting Section Tables ****************
@@ -42,8 +46,8 @@ class Workout_Set(Base):
     __tablename__ = "workout_sets"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    workout_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('workouts.id', ondelete='CASCADE')) #links set to an active workout
-    exercise_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('exercises.id', ondelete='CASCADE')) #links exersice to an exersice in our db
+    workout_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('workouts.id', ondelete='RESTRICT')) #links set to an active workout
+    exercise_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('exercises.id', ondelete='RESTRICT')) #links exersice to an exersice in our db
     reps: Mapped[int] = mapped_column(Integer, nullable=False) #this is a column for the number of reps in the set, it is an integer
     weight: Mapped[float] = mapped_column(Float, nullable=False) #this is a column for the weight used in the set, it is a float
 
@@ -83,25 +87,19 @@ class Program(Base):
 
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='program') #users following this program-- no cascade since RESTRICT blocks deleting a program in use
 
-#Stores the user profiles created from the onboarding quiz
-class User_Profile(Base):
-    __tablename__ = 'user_profiles'
-
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), unique=True) #one profile per user
-    goal: Mapped[str] = mapped_column(String(20), nullable=False) #takes in goal from frontend multiple choice
-    experience_level:Mapped[int] = mapped_column(Integer(), nullable=False) #takes in level from frontend mult choice
-    days_available: Mapped[int] = mapped_column(Integer(), nullable=False) #1-6 for days available to workout
-    equipment_available: Mapped[bool] = mapped_column(Boolean(), nullable=False) #whether they have equipment available in their gym
-
-#Stores program each user is using along with current day for them
+    
+#Stores program each user is using along with current day for them and their goals that they filled out in the quiz
 class User_Program(Base):
     __tablename__ = 'user_programs'
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    goal: Mapped[str] = mapped_column(String(), nullable=False) #purpose of the program
     program_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('programs.id', ondelete='RESTRICT')) #program it comes from-- CAN NOT DELETE PROGRAM IF IN USE HERE
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')) #user the program is for
     current_day: Mapped[int] = mapped_column(Integer(), default=1) #current day user is on--starts at first day
+    experience_level:Mapped[int] = mapped_column(Integer(), nullable=False) #takes in level from frontend mult choice
+    days_available: Mapped[int] = mapped_column(Integer(), nullable=False) #1-6 for days available to workout
+    equipment_available: Mapped[bool] = mapped_column(Boolean(), nullable=False) #whether they have equipment available in their gym
     program: Mapped["Program"] = relationship(back_populates='user_programs') #access to the program
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
 #*********** Nutrition Section *****************
@@ -120,7 +118,7 @@ class Meal(Base):
     user: Mapped['User'] = relationship(back_populates='meals') #access to the user for this meal entry
 
 #Stores the users macro goals
-class User_Goal(Base):
+class User_Goal_Nutrition(Base):
     __tablename__ = 'user_goals'
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -129,7 +127,7 @@ class User_Goal(Base):
     carbs_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
     fat_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
     calories_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
-    user: Mapped['User'] = relationship(back_populates='goals') #access to the user for this goal
+    user: Mapped['User'] = relationship(back_populates='nutrition_goals') #access to the user for this goal
 
 #************ Health Section *************
 
@@ -144,7 +142,7 @@ class Sleep(Base):
     duration: Mapped[float] = mapped_column(Float(), nullable=False)
     quality: Mapped[int] = mapped_column(Integer(), nullable=False) #1-5 rating
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    user: Mapped['User'] = relationship(back_populates='sleeps') #access to the user for this sleep entry
+    user: Mapped['User'] = relationship(back_populates='sleeps') #access to the user for this sleep entry-- can grab the goal from here
 
 #Stores the health resources we offer
 class Health_Resource(Base):
