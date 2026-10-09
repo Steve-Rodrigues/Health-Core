@@ -12,13 +12,16 @@ Base = declarative_base() #creates the Base call to put in the table class param
 
 class User(Base):
     __tablename__ = 'users'
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     username: Mapped[str] = mapped_column(String(30), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     #one-to-many sides of the relationships-- cascade lives here on the parent so deleting a user deletes their rows too
     workouts: Mapped[list["Workout"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    meals: Mapped[list["Meal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    goals: Mapped[list["User_Goal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    sleeps: Mapped[list["Sleep"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
 
 #********* Lifting Section Tables ****************
 
@@ -101,3 +104,76 @@ class User_Program(Base):
     current_day: Mapped[int] = mapped_column(Integer(), default=1) #current day user is on--starts at first day
     program: Mapped["Program"] = relationship(back_populates='user_programs') #access to the program
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
+#*********** Nutrition Section *****************
+
+#Stores each meal a user logs 
+class Meal(Base):
+    __tablename__ = 'meals'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    protein: Mapped[int] = mapped_column(Integer(), nullable=False)
+    carbs: Mapped[int] = mapped_column(Integer(), nullable=False)
+    fat: Mapped[int] = mapped_column(Integer(), nullable=False)
+    calories: Mapped[int] = mapped_column(Integer(), nullable=False)
+    user: Mapped['User'] = relationship(back_populates='meals') #access to the user for this meal entry
+
+#Stores the users macro goals
+class User_Goal(Base):
+    __tablename__ = 'user_goals'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    protein_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    carbs_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    fat_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    calories_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    user: Mapped['User'] = relationship(back_populates='goals') #access to the user for this goal
+
+#************ Health Section *************
+
+#Stores the sleep data the user stores each night
+class Sleep(Base):
+    __tablename__ = 'sleeps'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')) #user this sleep entry belongs to
+    sleep_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sleep_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration: Mapped[float] = mapped_column(Float(), nullable=False)
+    quality: Mapped[int] = mapped_column(Integer(), nullable=False) #1-5 rating
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user: Mapped['User'] = relationship(back_populates='sleeps') #access to the user for this sleep entry
+
+#Stores the health resources we offer
+class Health_Resource(Base):
+    __tablename__ = 'health_resources'
+
+    id:Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    title:Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    description:Mapped[str] = mapped_column(String(), nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+#Stores quotes we are holding
+class Quote(Base):
+    __tablename__ = 'quotes'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    quote_text: Mapped[str] = mapped_column(String(), nullable=False, unique=True)
+    author: Mapped[str] = mapped_column(String(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+#Stores info we have on first-aid stuff
+class First_Aid(Base):
+    __tablename__ = 'first_aids'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(), nullable=False)
+    category: Mapped[str] = mapped_column(String(), nullable=False)
+    summary: Mapped[str] = mapped_column(String())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+
