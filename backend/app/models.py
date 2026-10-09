@@ -12,7 +12,7 @@ Base = declarative_base() #creates the Base call to put in the table class param
 
 class User(Base):
     __tablename__ = 'users'
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     username: Mapped[str] = mapped_column(String(30), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -101,3 +101,34 @@ class User_Program(Base):
     current_day: Mapped[int] = mapped_column(Integer(), default=1) #current day user is on--starts at first day
     program: Mapped["Program"] = relationship(back_populates='user_programs') #access to the program
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
+
+#*********** Nutrition Section *****************
+
+#Stores each meal a user logs 
+class Meal(Base):
+    __tablename__ = 'meals'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    protein: Mapped[int] = mapped_column(Integer(), nullable=False)
+    carbs: Mapped[int] = mapped_column(Integer(), nullable=False)
+    fat: Mapped[int] = mapped_column(Integer(), nullable=False)
+    calories: Mapped[int] = mapped_column(Integer(), nullable=False)
+    user: Mapped['User'] = relationship(back_populates='users') #access to the user for this meal entry
+
+#Stores the users macro goals
+def User_Goal(Base):
+    __tablename__ = 'user_goals'
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    protein_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    carbs_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    fat_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    calories_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
+    user: Mapped['User'] = relationship(back_populates='users') #access to the user for this goal
+
+#************ Health Section *************
+
+
+
