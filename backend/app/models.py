@@ -1,10 +1,10 @@
 #creating the db tables in here that will be accessed/managed using sqlalchemy-- the python orm for using db
 #orm is like a middleman between the user and the actual db, it allows you to write python object code and it translates into SQL for the real db
-from datetime import datetime
+from datetime import datetime, date
 
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, DateTime, func, Integer, Float, Boolean
+from sqlalchemy import String, ForeignKey, DateTime, func, Integer, Float, Boolean, Date
 from uuid import UUID, uuid4 #UUID is the type for the type hints, uuid4 generates new ids
 from sqlalchemy.dialects.postgresql import UUID as PGUUID #this is the true UUID column data type
 
@@ -109,6 +109,7 @@ class Meal(Base):
     __tablename__ = 'meals'
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    meal_date: Mapped[date] = mapped_column(Date(), index=True) #holds the yyyy-mm-dd for a meal so we can filter by day in the frontend
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
     protein: Mapped[int] = mapped_column(Integer(), nullable=False)
