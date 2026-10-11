@@ -7,7 +7,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition
 from app.helper_funcs import get_nutrition_stats
@@ -61,10 +61,10 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
     user_goals = db.scalar(select(User_Goal_Nutrition).where(User_Goal_Nutrition.user_id==user_id))
     all_meals_day = db.scalars(select(Meal).where(Meal.user_id==user_id, Meal.meal_date==day).order_by(Meal.created_at)).all() #grabs all meals for the chosen day
     ##Get total count for each macro from the meals eaten that day
-    macros={'Calories':sum(meal.calories for meal in all_meals_day), 
-            'Protein':sum(meal.protein for meal in all_meals_day), 
-            'Carbs':sum(meal.carbs for meal in all_meals_day), 
-            'Fats':sum(meal.fat for meal in all_meals_day)}
+    macros={'calories':sum(meal.calories for meal in all_meals_day), 
+            'protein':sum(meal.protein for meal in all_meals_day), 
+            'carbs':sum(meal.carbs for meal in all_meals_day), 
+            'fats':sum(meal.fat for meal in all_meals_day)}
     #nothing to display in this case
     if user_goals is None:
         return {
@@ -75,21 +75,37 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
             "macro_score": None,
         }
     ##Get goal of each macro
-    macro_goals = {'Calories':user_goals.calories_goal, 'Protein':user_goals.protein_goal,'Carbs':user_goals.carbs_goal,'Fats':user_goals.fat_goal}
+    macro_goals = {'calories':user_goals.calories_goal, 'protein':user_goals.protein_goal,'carbs':user_goals.carbs_goal,'fats':user_goals.fat_goal}
     ##Get progress made on goal based on what was done for each macro
-    macro_progress_percent = {'Calories':get_nutrition_stats(macros['Calories'],user_goals.calories_goal), 
-                      'Protein':get_nutrition_stats(macros['Protein'], user_goals.protein_goal), 
-                      'Carbs':get_nutrition_stats(macros['Carbs'],user_goals.carbs_goal), 
-                      'Fats':get_nutrition_stats(macros['Fats'],user_goals.fat_goal)}
+    macro_progress_percent = {'calories':get_nutrition_stats(macros['calories'],user_goals.calories_goal), 
+                      'protein':get_nutrition_stats(macros['protein'], user_goals.protein_goal), 
+                      'carbs':get_nutrition_stats(macros['carbs'],user_goals.carbs_goal), 
+                      'fats':get_nutrition_stats(macros['fats'],user_goals.fat_goal)}
     total_progress_percent = (sum(macro_progress_percent.values())/len(macro_progress_percent)) #computes score as percentage for all macros
     return_data = {
         'date': day,
         'macros_consumed_counts': macros,
-        'macro_goals': macro_goals,
+        'macro_goals_counts': macro_goals,
         'macro_consumed_percentage': macro_progress_percent,
         'macro_score': total_progress_percent
     }
     return return_data
+
+#endpoint to add a meal from user
+@app.post('/nutrition/create-meal', response_model=Create_Meal_Out)
+def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    meal = Meal(meal_name=body.meal_name, protein=body.protein, carbs=body.carbs, calories=body.calories, fats=body.fats, meal_type=body.meal_type)
+    try:
+        db.add(meal)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not add meal")
+    db.commit()
+    db.refresh(meal)
+    return meal
+
+    
+
 
 
 

@@ -43,9 +43,24 @@ class Nutrition_Summary_Out(BaseModel):
     macros_consumed_counts: Macros
     macro_goals: Macros | None = None
     macro_consumed_percentage: Macros | None = None
-    macro_score: int | None = None
+    macro_score: float | None = None
 
-
+#format to take in the create meal data 
+class Create_Meal_In(BaseModel):
+    meal_name: str
+    meal_type: str
+    calories: int | None = None
+    protein: int | None = None
+    carbs: int | None = None
+    fats: int | None = None
+#format to send create meal data back to client
+class Create_Meal_Out(BaseModel):
+    meal_name: str
+    meal_type: str
+    calories: int | None = None
+    protein: int | None = None
+    carbs: int | None = None
+    fats: int | None = None
 
 
 

@@ -112,10 +112,11 @@ class Meal(Base):
     meal_date: Mapped[date] = mapped_column(Date(), index=True) #holds the yyyy-mm-dd for a meal so we can filter by day in the frontend
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    meal_name: Mapped[str] = mapped_column(String(), nullable=False) #name of meal
     protein: Mapped[int] = mapped_column(Integer(), nullable=False)
     carbs: Mapped[int] = mapped_column(Integer(), nullable=False)
     fat: Mapped[int] = mapped_column(Integer(), nullable=False)
-    calories: Mapped[int] = mapped_column(Integer(), nullable=False)
+    calories: Mapped[int | None] = mapped_column(Integer(), nullable=False, default=0)
     user: Mapped['User'] = relationship(back_populates='meals') #access to the user for this meal entry
 
 #Stores the users macro goals
