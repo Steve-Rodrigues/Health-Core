@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time, datetime, timedelta
 from uuid import UUID
 
 from app.auth_dependency import get_curr_user
@@ -7,9 +7,9 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition
+from app.models import User, Meal, User_Goal_Nutrition, Sleep
 from app.helper_funcs import get_nutrition_stats
 
 
@@ -18,6 +18,8 @@ app = FastAPI()
 @app.get('/')
 def test():
     return {'msg': "Success"}
+
+#************************ Signup / Login / Onboarding *****************************
 
 #signup route-- creates a User in the DB with id from jwt and username they entered in the form
 @app.post('/users/signup', response_model=User_Signup_Out, status_code=status.HTTP_201_CREATED)
@@ -51,11 +53,19 @@ def onboardSurvey(body: User_Profile_Survey, db: Session= Depends(get_db), user_
     user.goal_weight = body.goal_weight
     user.workouts_per_week_goal = body.workouts_per_week_goal
     user.sleep_goal = body.sleep_goal
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Does not follow database constraints")
+
     db.refresh(user)
     return user
 
-#Nutrition summary page
+# *********************** Nutrition Section ******************************
+
+#Nutrition summary page by day from our calender switch buttons
+#pass in date as a query parameter to this route from frontend
 @app.get('/nutrition/summary', response_model=Nutrition_Summary_Out)
 def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: Session=Depends(get_db)):
     user_goals = db.scalar(select(User_Goal_Nutrition).where(User_Goal_Nutrition.user_id==user_id))
@@ -124,6 +134,31 @@ def nutrition_goal(body: Create_Nutrition_Goal_In, user_id: UUID = Depends(get_c
         db.commit()
     db.refresh(nutrition_goal)
     return nutrition_goal
+
+#********************************* Health Section ****************************
+
+#endpoint to log sleep data for a given night
+@app.post('/sleep/log', response_model=Log_Sleep_Out)
+def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    start_date_time = datetime.combine(body.wake_date, body.bed_time) #turns into datetime to get duration
+    end_date_time = datetime.combine(body.wake_date, body.wake_time) #turns time into datetime to get duration
+    #went to bed past midnight so the time is technically less than the end on the same day
+    if start_date_time >= end_date_time:
+        start_date_time -= timedelta(days=1) #moves back 1 day so the end is always bigger because cant sleep before u wake up
+    duration_mins = int((end_date_time-start_date_time).total_seconds()//60)
+    sleep_log = Sleep(user_id=user_id, sleep_date=body.wake_date, bed_time=body.bed_time, wake_time=body.wake_time, duration_mins=duration_mins, quality=body.quality, notes=body.notes)
+    try:
+        db.add(sleep_log)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not create sleep record")
+    db.refresh(sleep_log)
+    return sleep_log
+
+
+
+    
 
 
     

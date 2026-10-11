@@ -1,10 +1,10 @@
 #creating the db tables in here that will be accessed/managed using sqlalchemy-- the python orm for using db
 #orm is like a middleman between the user and the actual db, it allows you to write python object code and it translates into SQL for the real db
-from datetime import datetime, date
+from datetime import datetime, date, time
 
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, DateTime, func, Integer, Float, Boolean, Date
+from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint, func, Integer, Float, Boolean, Date, Time
 from uuid import UUID, uuid4 #UUID is the type for the type hints, uuid4 generates new ids
 from sqlalchemy.dialects.postgresql import UUID as PGUUID #this is the true UUID column data type
 
@@ -137,13 +137,16 @@ class User_Goal_Nutrition(Base):
 #Stores the sleep data the user stores each night
 class Sleep(Base):
     __tablename__ = 'sleeps'
+    __table_args__ = (UniqueConstraint('user_id', 'sleep_date',name='uq_sleeps_user_id_sleep_date'),)  # one sleep per user per day
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')) #user this sleep entry belongs to
-    sleep_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    sleep_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    duration: Mapped[float] = mapped_column(Float(), nullable=False)
-    quality: Mapped[int] = mapped_column(Integer(), nullable=False) #1-5 rating
+    sleep_date: Mapped[date] = mapped_column(Date()) #using the wake_date from client as this value. It's the day for this sleep record
+    bed_time: Mapped[time] = mapped_column(Time()) #in format 00:00 from frontend
+    wake_time: Mapped[time] = mapped_column(Time()) #in format 00:00 from frontend
+    duration_mins: Mapped[int] = mapped_column(Integer()) #amount of mins that were slept that night
+    quality: Mapped[int] = mapped_column(Integer()) #1-5 rating
+    notes: Mapped[str|None] = mapped_column(String(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     user: Mapped['User'] = relationship(back_populates='sleeps') #access to the user for this sleep entry-- can grab the goal from here
 

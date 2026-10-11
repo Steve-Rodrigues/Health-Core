@@ -1,5 +1,5 @@
 #Holds all of the pydantic schemas which are going to validate JSON data coming in and out of the backend
-from datetime import datetime, date
+from datetime import datetime, date, time
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -77,6 +77,26 @@ class Create_Nutrition_Goal_Out(BaseModel):
     fat_goal: int 
     calories_goal: int
     model_config = ConfigDict(from_attributes=True)
+
+#format to take in the sleep data
+class Log_Sleep_In(BaseModel):
+    wake_date: date
+    bed_time: time
+    wake_time: time
+    quality: int
+    notes: str
+#format to send back sleep data 
+class Log_Sleep_Out(BaseModel):
+    sleep_date: date
+    bed_time: time
+    wake_time: time
+    duration_mins: int
+    quality: int = Field(le=1, ge=5)
+    notes: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 
 
 
