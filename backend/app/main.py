@@ -7,7 +7,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition
 from app.helper_funcs import get_nutrition_stats
@@ -103,6 +103,28 @@ def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not add meal")
     db.refresh(meal)
     return meal
+#endpoint to create nutrition goals-- PUT so it just adds whatever is there, checks if alr an entry first to update
+@app.put('/nutrition/goal', response_model=Create_Nutrition_Goal_Out, status_code=status.HTTP_200_OK)
+def nutrition_goal(body: Create_Nutrition_Goal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    nutrition_goal = db.scalar(select(User_Goal_Nutrition).where(User_Goal_Nutrition.user_id == user_id))
+    #not previous entry, so we create a db entry using request body data
+    if not nutrition_goal:
+        nutrition_goal = User_Goal_Nutrition(protein_goal=body.protein_goal,carbs_goal=body.carbs_goal,fat_goal=body.fat_goal,calories_goal=body.calories_goal,user_id=user_id)
+        try:
+            db.add(nutrition_goal)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not add user goal")
+    else:
+        nutrition_goal.calories_goal = body.calories_goal
+        nutrition_goal.carbs_goal = body.carbs_goal
+        nutrition_goal.fat_goal = body.fat_goal
+        nutrition_goal.protein_goal = body.protein_goal
+        db.commit()
+    db.refresh(nutrition_goal)
+    return nutrition_goal
+
 
     
 

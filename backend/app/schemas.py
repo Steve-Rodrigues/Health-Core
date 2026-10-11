@@ -59,10 +59,23 @@ class Create_Meal_Out(BaseModel):
     created_at: datetime
     meal_name: str
     meal_type: str
-    calories: int | None = None
-    protein: int | None = None
-    carbs: int | None = None
-    fat: int | None = None
+    calories: int = 0
+    protein: int = 0
+    carbs: int = 0
+    fat: int = 0
+    model_config = ConfigDict(from_attributes=True)
+#format to take in user nutrition goals
+class Create_Nutrition_Goal_In(BaseModel):
+    protein_goal: int = Field(ge=0) #goal must be greater or equal to 0
+    carbs_goal: int = Field(ge=0)
+    fat_goal: int = Field(ge=0)
+    calories_goal: int = Field(ge=0)
+#format to send user nutrition goals back to the client
+class Create_Nutrition_Goal_Out(BaseModel):
+    protein_goal: int 
+    carbs_goal: int 
+    fat_goal: int 
+    calories_goal: int
     model_config = ConfigDict(from_attributes=True)
 
 

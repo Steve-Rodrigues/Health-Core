@@ -24,7 +24,7 @@ class User(Base):
     workouts: Mapped[list["Workout"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     meals: Mapped[list["Meal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
-    nutrition_goals: Mapped[list["User_Goal_Nutrition"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    nutrition_goal: Mapped["User_Goal_Nutrition"] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     sleeps: Mapped[list["Sleep"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
 
 #********* Lifting Section Tables ****************
@@ -125,12 +125,12 @@ class User_Goal_Nutrition(Base):
     __tablename__ = 'user_goals'
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), unique=True)
     protein_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
     carbs_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
     fat_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
     calories_goal: Mapped[int] = mapped_column(Integer(), nullable=False)
-    user: Mapped['User'] = relationship(back_populates='nutrition_goals') #access to the user for this goal
+    user: Mapped['User'] = relationship(back_populates='nutrition_goal') #access to the user for this goal
 
 #************ Health Section *************
 
