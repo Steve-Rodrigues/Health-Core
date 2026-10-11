@@ -92,15 +92,15 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
     return return_data
 
 #endpoint to add a meal from user
-@app.post('/nutrition/create-meal', response_model=Create_Meal_Out)
+@app.post('/nutrition/create-meal', response_model=Create_Meal_Out, status_code=status.HTTP_201_CREATED)
 def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    meal = Meal(meal_name=body.meal_name, protein=body.protein, carbs=body.carbs, calories=body.calories, fats=body.fats, meal_type=body.meal_type)
+    meal = Meal(meal_name=body.meal_name, protein=body.protein, carbs=body.carbs, calories=body.calories, fat=body.fats, meal_type=body.meal_type, meal_date=date.today(),user_id=user_id)
     try:
         db.add(meal)
+        db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not add meal")
-    db.commit()
     db.refresh(meal)
     return meal
 

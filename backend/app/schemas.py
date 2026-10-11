@@ -49,18 +49,21 @@ class Nutrition_Summary_Out(BaseModel):
 class Create_Meal_In(BaseModel):
     meal_name: str
     meal_type: str
-    calories: int | None = None
-    protein: int | None = None
-    carbs: int | None = None
-    fats: int | None = None
+    calories: int = 0
+    protein: int = 0
+    carbs: int = 0
+    fat: int = 0
 #format to send create meal data back to client
 class Create_Meal_Out(BaseModel):
+    meal_date: date
+    created_at: datetime
     meal_name: str
     meal_type: str
     calories: int | None = None
     protein: int | None = None
     carbs: int | None = None
-    fats: int | None = None
+    fat: int | None = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 
