@@ -81,6 +81,7 @@ class Program(Base):
     name: Mapped[str] = mapped_column(String(), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(String(), nullable=False)
     difficulty: Mapped[int]  = mapped_column(Integer(), nullable=False) #1-5
+    previous_day: Mapped[int] = mapped_column(Integer(), default=0) #grab prev day and then add 1, if it is greater than days then go to 1-- set to curr day each time
     days: Mapped[int] = mapped_column(Integer(), nullable=False) #per week
     goal: Mapped[str] = mapped_column(String(), nullable=False) # could be bulk, shredding, etc...
     program_length: Mapped[int | None] = mapped_column(Integer(), nullable=True) #***Might need to change the length convention
