@@ -1,2 +1,73 @@
-.dart_tool/package_config.json
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Database / logs
+*.log
+*.sqlite3
+*.db
+
+# Editor / OS
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Flutter / iOS generated files
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id
+ios/Runner/GeneratedPluginRegistrant.*
+
+# iOS build artifacts
+ios/Pods/
+ios/.symlinks/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+**/DerivedData/
+**/Pods/
+**/.symlinks/
+**/.generated/
+**/*.xcworkspace
+
+# Xcode / SwiftPM temp files
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+*.perspectivev3
+!default.mode1v3
+!default.mode2v3
+!default.pbxuser
+!default.perspectivev3
+profile
+*.xcuserstate
+
+# Misc
+**/dgph
+.sconsign.dblite
+.tags*
+**/.vagrant/
+Icon?
