@@ -29,6 +29,7 @@ class User_Profile_Survey(BaseModel):
     goal_weight: float | None = None
     workouts_per_week_goal: int | None = None
     sleep_goal: float | None = None
+    height: float | None = None
 
 #for the macros dict
 class Macros(BaseModel):

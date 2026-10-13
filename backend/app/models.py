@@ -17,6 +17,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(30), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     current_weight: Mapped[float] = mapped_column(Float(), nullable=True)
+    height: Mapped[float] = mapped_column(Float(), nullable=True)
     goal_weight: Mapped[float] = mapped_column(Float(), nullable=True)
     workouts_per_week_goal: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     sleep_goal: Mapped[float] = mapped_column(Float(), nullable=True)

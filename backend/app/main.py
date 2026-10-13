@@ -53,6 +53,7 @@ def onboardSurvey(body: User_Profile_Survey, db: Session= Depends(get_db), user_
     user.goal_weight = body.goal_weight
     user.workouts_per_week_goal = body.workouts_per_week_goal
     user.sleep_goal = body.sleep_goal
+    user.height = body.height
     try:
         db.commit()
     except IntegrityError:
