@@ -7,9 +7,9 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out 
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program
 from app.helper_funcs import get_nutrition_stats
 
 
@@ -158,4 +158,40 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
     return sleep_log
 
 #********************************* Fitness Section ****************************
+
+#start-workout endpoint
+@app.get('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_202_ACCEPTED)
+def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    result_obj = {} #store the result in here
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
+    program = db.scalar(select(Program).where(Program.id==user_program.program_id))
+    if user_program is None or program is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='No active programs for the user')
+    workout = Workout(user_id=user_id, program_id=program.id) #this is the workout we are CURRENTLY MAKING which is why it's not a query
+    try:
+        db.add(workout)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Unable to create workout')
+    
+    result_obj['name'], result_obj['description'], result_obj['goal'],result_obj['lift_data'] = program.name, program.description, program.goal,[]
+    if user_program.current_day > program.number_of_days: user_program.current_day = 1
+    else: user_program.current_day += 1
+    #getting all the exercises/sets/reps from the db for the day and program id
+    all_exercises = db.execute(select(Program_Exercise,Exercise)
+                               .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
+                               .where(Program_Exercise.program_id==program.id, Program_Exercise.day==user_program.current_day)).all()
+    for program_exercise, exercise in all_exercises:
+        curr_exercise = {} #build this and append to lift_data each time-- stores {exercise, exercise_id, sets, reps}
+        curr_exercise['exercise'], curr_exercise['exercise_id'], curr_exercise['sets'], curr_exercise['reps'] = exercise.name,exercise.id,program_exercise.sets,program_exercise.reps
+        result_obj['lift_data'].append(curr_exercise)
+    db.refresh(workout)
+    result_obj['workout_id'] = workout.id
+    return result_obj
+
+
+
+    
+    
 

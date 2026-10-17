@@ -81,8 +81,7 @@ class Program(Base):
     name: Mapped[str] = mapped_column(String(), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(String(), nullable=False)
     difficulty: Mapped[int]  = mapped_column(Integer(), nullable=False) #1-5
-    previous_day: Mapped[int] = mapped_column(Integer(), default=0) #grab prev day and then add 1, if it is greater than days then go to 1-- set to curr day each time
-    days: Mapped[int] = mapped_column(Integer(), nullable=False) #per week
+    number_of_days: Mapped[int] = mapped_column(Integer(), nullable=False) #per week-- use this to get the current day
     goal: Mapped[str] = mapped_column(String(), nullable=False) # could be bulk, shredding, etc...
     program_length: Mapped[int | None] = mapped_column(Integer(), nullable=True) #***Might need to change the length convention
     equipment: Mapped[bool] = mapped_column(Boolean(), default=False) #if needed for this program
@@ -98,7 +97,7 @@ class User_Program(Base):
     goal: Mapped[str] = mapped_column(String(), nullable=False) #purpose of the program
     program_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('programs.id', ondelete='RESTRICT')) #program it comes from-- CAN NOT DELETE PROGRAM IF IN USE HERE
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')) #user the program is for
-    current_day: Mapped[int] = mapped_column(Integer(), default=1) #current day user is on--starts at first day
+    current_day: Mapped[int] = mapped_column(Integer(), default=0) #current day user is on-- always add 1 and check if adding 1 is over the number of days of our program, if so go back to day 1
     experience_level:Mapped[int] = mapped_column(Integer(), nullable=False) #takes in level from frontend mult choice
     days_available: Mapped[int] = mapped_column(Integer(), nullable=False) #1-6 for days available to workout
     equipment_available: Mapped[bool] = mapped_column(Boolean(), nullable=False) #whether they have equipment available in their gym

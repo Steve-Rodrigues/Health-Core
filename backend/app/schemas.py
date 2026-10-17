@@ -96,8 +96,20 @@ class Log_Sleep_Out(BaseModel):
     notes: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
-
-
+#format to send the object with the workout data in
+class Workout_Exercises_Out(BaseModel):
+    exercise:str
+    exercise_id: UUID
+    sets: int
+    reps: int
+#format to send start workout data in response to the client 
+class Start_Workout_Out(BaseModel):
+    name: str
+    description: str
+    goal: str
+    workout_id: UUID
+    lift_data: list[Workout_Exercises_Out]
+    
 
 
 
