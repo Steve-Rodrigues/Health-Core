@@ -42,15 +42,16 @@ class Workout(Base):
     notes : Mapped[str | None] = mapped_column(String(),nullable=True) #this is a column for any notes associated with the workout, optional
     user: Mapped["User"] = relationship(back_populates='workouts')
 
-#Tracks each set a user completes
+#Tracks each set a user completes-- As of rn it only sends the data for once an entire exercise is done. So sends sets/reps/weight used
 class Workout_Set(Base):
     __tablename__ = "workout_sets"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     workout_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('workouts.id', ondelete='RESTRICT')) #links set to an active workout
     exercise_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('exercises.id', ondelete='RESTRICT')) #links exersice to an exersice in our db
-    reps: Mapped[int] = mapped_column(Integer, nullable=False) #this is a column for the number of reps in the set, it is an integer
-    weight: Mapped[float] = mapped_column(Float, nullable=False) #this is a column for the weight used in the set, it is a float
+    reps: Mapped[int] = mapped_column(Integer(), default=0) #this is a column for the number of reps in the set, it is an integer
+    weight: Mapped[float] = mapped_column(Float(), default=0) #this is a column for the weight used in the set, it is a float
+    sets: Mapped[int] = mapped_column(Integer(), default=0)
 
 #Holds all exersices we store for use
 class Exercise(Base):

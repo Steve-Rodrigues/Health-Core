@@ -109,7 +109,22 @@ class Start_Workout_Out(BaseModel):
     goal: str
     workout_id: UUID
     lift_data: list[Workout_Exercises_Out]
-    
+
+#format to recieve the info from a user's exercise after completion
+class Exercise_Data_In(BaseModel):
+    exercise_id: UUID
+    sets: int = Field(default=0, ge=0)
+    reps: int = Field(default=0, ge=0)
+    weight: float = Field(default=0, ge=0)
+#format to send the data back to the client-side
+class Exercise_Data_Out(BaseModel):
+    workout_id: UUID
+    exercise_id: UUID
+    sets: int = Field(default=0, ge=0)
+    reps: int = Field(default=0, ge=0)
+    weight: float = Field(default=0, ge=0)
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 

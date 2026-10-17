@@ -7,9 +7,9 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out 
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats
 
 
@@ -160,24 +160,28 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
 #********************************* Fitness Section ****************************
 
 #start-workout endpoint
-@app.get('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_202_ACCEPTED)
+@app.post('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_201_CREATED)
 def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
     result_obj = {} #store the result in here
     user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
+    if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
     program = db.scalar(select(Program).where(Program.id==user_program.program_id))
-    if user_program is None or program is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='No active programs for the user')
-    workout = Workout(user_id=user_id, program_id=program.id) #this is the workout we are CURRENTLY MAKING which is why it's not a query
+    if program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
+    #check if there is an active workout before creating another-- tests for double clicks
+    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.completed_at.is_(None)))
+    if workout is None: 
+        workout = Workout(user_id=user_id, program_id=program.id)
+        if user_program.current_day >= program.number_of_days: user_program.current_day = 1
+        else: user_program.current_day += 1
+
+    result_obj['name'], result_obj['description'], result_obj['goal'],result_obj['lift_data'] = program.name, program.description, program.goal,[]
+
     try:
         db.add(workout)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Unable to create workout')
-    
-    result_obj['name'], result_obj['description'], result_obj['goal'],result_obj['lift_data'] = program.name, program.description, program.goal,[]
-    if user_program.current_day > program.number_of_days: user_program.current_day = 1
-    else: user_program.current_day += 1
     #getting all the exercises/sets/reps from the db for the day and program id
     all_exercises = db.execute(select(Program_Exercise,Exercise)
                                .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
@@ -189,6 +193,23 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
     db.refresh(workout)
     result_obj['workout_id'] = workout.id
     return result_obj
+
+#Endpoint for when a user completes an exercise-- sends the sets/reps/weight they used. 
+# NOTE: Might change this so they send data after every set they complete
+@app.post('/lifting/{workout_id}/finish-exercise', response_model=Exercise_Data_Out)
+def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    current_workout = db.scalar(select(Workout).where(Workout.id==workout_id, Workout.user_id==user_id)) #checking to see if there is an active workout
+    if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Could not find workout with that ID')
+    if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='There is not an active workout to record in')
+    workout_set = Workout_Set(workout_id=body.workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
+    try:
+        db.add(workout_set)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not create set')
+    db.refresh(workout_set)
+    return workout_set
 
 
 
