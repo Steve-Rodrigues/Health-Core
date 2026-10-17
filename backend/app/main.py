@@ -157,5 +157,22 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
     db.refresh(sleep_log)
     return sleep_log
 
-#********************************* Fitness Section ****************************
+#*********************************** Lifting Section ***************************************
+
+#endpoint to 
+
+
+    
+
+
+    
+
+
+
+
+
+
+    
+
+    
 
