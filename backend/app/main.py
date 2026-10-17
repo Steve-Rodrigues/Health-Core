@@ -7,9 +7,9 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out, Start_Workout_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, User_Program
 from app.helper_funcs import get_nutrition_stats
 
 
@@ -176,3 +176,23 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
 
     
 
+#endpoint to start a workout for the active program day
+#***********   note: MOST OF THIS MAY BE WRONG, WORK IN PROGRESS    ****************************
+@app.post('/workout/start', response_model=Start_Workout_Out)
+def start_workout(program_day: int | None = None, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id == user_id).order_by(User_Program.id.desc()))
+    if not user_program:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No workout found")
+
+    day = program_day if program_day is not None else user_program.current_day
+
+    workout = Workout(user_id=user_id, program_id=user_program.program_id, started_at=datetime.now())
+    try:
+        db.add(workout)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not start workout")
+    db.refresh(workout)
+
+    return workout

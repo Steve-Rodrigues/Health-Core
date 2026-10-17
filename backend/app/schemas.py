@@ -97,8 +97,11 @@ class Log_Sleep_Out(BaseModel):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-
-
-
+#format to send back the start workout data
+class Start_Workout_Out(BaseModel):
+    id: UUID
+    program_id: UUID | None = None
+    started_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 
