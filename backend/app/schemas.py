@@ -125,7 +125,20 @@ class Exercise_Data_Out(BaseModel):
     weight: float = Field(default=0, ge=0)
     model_config = ConfigDict(from_attributes=True)
 
-
-
-
+#format for the object being used in the schema below for the best workout of the day
+class Best_Workout_Today(BaseModel):
+    exercise_name: str
+    sets: int
+    reps: int
+    weight: float
+#format we send the summary in for the completed workout page
+class Workout_Summary_Out(BaseModel):
+    workout_name: str
+    workout_day: int
+    total_days: int
+    duration: float
+    number_exercises: int
+    number_sets: int
+    total_volume: float
+    best_exercise: Best_Workout_Today | None = None
 
