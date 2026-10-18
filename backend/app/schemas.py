@@ -142,3 +142,6 @@ class Workout_Summary_Out(BaseModel):
     total_volume: float
     best_exercise: Best_Workout_Today | None = None
 
+#format for recieving the notes from the client when finish workout is pressed in summary
+class Finalize_Workout_In(BaseModel):
+    notes: str | None = None

@@ -7,7 +7,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats
@@ -201,7 +201,7 @@ def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Dep
     current_workout = db.scalar(select(Workout).where(Workout.id==workout_id, Workout.user_id==user_id)) #checking to see if there is an active workout
     if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Could not find workout with that ID')
     if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='There is not an active workout to record in')
-    workout_set = Workout_Set(workout_id=body.workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
+    workout_set = Workout_Set(workout_id=workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
     try:
         db.add(workout_set)
         db.commit()
@@ -220,7 +220,7 @@ def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user)
 
     user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id, User_Program.program_id==current_workout.program_id))
     if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program for this workout not found')
-    
+
     current_workout.completed_at = func.now() #gets the postgres version of the date, consistent to how we do the start time
     try:
         db.commit()
@@ -249,9 +249,18 @@ def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user)
     summary_stats['workout_name'],summary_stats['workout_day'],summary_stats['total_days'] = user_program.program.name,user_program.current_day,user_program.program.number_of_days
     return summary_stats
 
-
-
+#endpoint for finalizing the workout-- clicking the save/finish workout button on the summary screen. Only thing being added is the optional notes section to the existing workout row in the db
+@app.patch('/lifting/{workout_id}/submit-workout', status_code=status.HTTP_200_OK)
+def finalize_workout(body: Finalize_Workout_In,workout_id:UUID, user_id: UUID = Depends(get_curr_user), db: Session=Depends(get_db)):
+    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.id==workout_id))
+    if workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Workout not found')
+    elif workout.completed_at is None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Can not save a non-finished workout')
+    if body.notes is not None:
+        workout.notes = body.notes
+        db.commit()
+    return {"data": "success"}
     
+
 
 
     
