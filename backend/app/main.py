@@ -86,13 +86,13 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
             "macro_score": None,
         }
     ##Get goal of each macro
-    macro_goals = {'calories':user_goals.calories_goal, 'protein':user_goals.protein_goal,'carbs':user_goals.carbs_goal,'fats':user_goals.fat_goal}
+    macro_goals = {'calories':user_goals.calories_goal, 'protein':user_goals.protein_goal,'carbs':user_goals.carbs_goal,'fat':user_goals.fat_goal}
     ##Get progress made on goal based on what was done for each macro
     macro_progress_percent = {'calories':get_nutrition_stats(macros['calories'],user_goals.calories_goal), 
                       'protein':get_nutrition_stats(macros['protein'], user_goals.protein_goal), 
                       'carbs':get_nutrition_stats(macros['carbs'],user_goals.carbs_goal), 
-                      'fats':get_nutrition_stats(macros['fats'],user_goals.fat_goal)}
-    total_progress_percent = (sum(macro_progress_percent.values())/len(macro_progress_percent)) #computes score as percentage for all macros
+                      'fat':get_nutrition_stats(macros['fat'],user_goals.fat_goal)}
+    total_progress_percent = round(sum(macro_progress_percent.values())/len(macro_progress_percent), 1) #computes score as percentage for all macros
     return_data = {
         'date': day,
         'macros_consumed_counts': macros,

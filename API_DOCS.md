@@ -10,17 +10,52 @@ Reference for the frontend: every backend endpoint, what to send, and what comes
 
 ### Authentication
 
-Every endpoint except `GET /` needs the Supabase access token of the signed-in user:
+**Every request** to every endpoint except `GET /` must include the Supabase access token of the signed-in user in this header:
 
 ```
 Authorization: Bearer <supabase_access_token>
 ```
 
-The backend reads the user's ID from the token, so **you never send a `user_id` in a request body**.
+The backend doesn't keep sessions or remember who you are between requests. Each request is checked on its own, so a request without the header is rejected even if the previous one worked. This includes `POST /users/signup`.
+
+The backend reads the user's ID from the token, so **you never send a `user_id`** in a body, query string or path. Sending one does nothing; the ID always comes from the token.
+
+#### Set it up once, not on every page
+
+Don't add the header by hand in each screen. Put it in one shared API helper and have every page use that helper:
+
+```dart
+// lib/services/api.dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+const baseUrl = 'http://<host>:8000';
+
+Map<String, String> _headers() {
+  // Read the session on every call, so a refreshed token is always used.
+  final token = Supabase.instance.client.auth.currentSession?.accessToken;
+  return {
+    'Content-Type': 'application/json',
+    if (token != null) 'Authorization': 'Bearer $token',
+  };
+}
+
+Future<http.Response> apiGet(String path) =>
+    http.get(Uri.parse('$baseUrl$path'), headers: _headers());
+
+Future<http.Response> apiPost(String path, Map<String, dynamic> body) =>
+    http.post(Uri.parse('$baseUrl$path'), headers: _headers(), body: jsonEncode(body));
+```
+
+A page then only calls, for example, `apiPost('/nutrition/create-meal', {...})`.
+
+- **Don't store the token yourself.** Access tokens expire after about an hour, and `supabase_flutter` refreshes them in the background. Always read `currentSession` at request time, as above.
+- **On a `401`, send the user back to the login screen.** It means the token is missing, expired or invalid.
 
 | Problem | Status |
 |---|---|
-| Header missing | `403` (or `401`, depending on the FastAPI version) |
+| Header missing | `401` — `{"detail": "Not authenticated"}` |
 | Token expired | `401` — `{"detail": "JWT token is expired"}` |
 | Token invalid | `401` — `{"detail": "Token is not valid"}` |
 
@@ -189,28 +224,27 @@ GET /nutrition/summary?day=2026-10-20
 ```json
 {
   "date": "2026-10-20",
-  "macros_consumed_counts": { "calories": 1450, "protein": 95, "carbs": 160, "fat": 40 },
-  "macro_goals":            { "calories": 2200, "protein": 150, "carbs": 250, "fat": 70 },
+  "macros_consumed_counts": { "calories": 1450.0, "protein": 95.0, "carbs": 160.0, "fat": 40.0 },
+  "macro_goals":            { "calories": 2200.0, "protein": 150.0, "carbs": 250.0, "fat": 70.0 },
   "macro_consumed_percentage": { "calories": 65.9, "protein": 63.3, "carbs": 64.0, "fat": 57.1 },
   "macro_score": 62.6
 }
 ```
-- `macro_consumed_percentage` values are 0–100 and **capped at 100** (going over the goal still shows 100).
-- `macro_score` is the average of the four percentages.
+- `macro_consumed_percentage` values are 0–100, rounded to 1 decimal, and **capped at 100** (going over the goal still shows 100).
+- `macro_score` is the average of the four percentages, rounded to 1 decimal.
+- All numbers in this response are decimals (e.g. `1450.0`), so read them as `num`/`double`, not `int`.
 
 **Response `200`: user has not set goals yet**
 ```json
 {
   "date": "2026-10-20",
-  "macros_consumed_counts": { "calories": 1450, "protein": 95, "carbs": 160, "fat": 40 },
+  "macros_consumed_counts": { "calories": 1450.0, "protein": 95.0, "carbs": 160.0, "fat": 40.0 },
   "macro_goals": null,
   "macro_consumed_percentage": null,
   "macro_score": null
 }
 ```
 If `macro_goals` is `null`, prompt the user to set goals with `PUT /nutrition/goal`.
-
-> ⚠️ Currently broken on the backend (key-name mismatch). See "Known backend issues" below.
 
 ---
 
@@ -256,8 +290,6 @@ Logs a meal. The meal is always saved under **today's date** (server time). You 
 **Errors**
 - `400` `"Could not add meal"`
 
-> ⚠️ Currently broken on the backend. See "Known backend issues" below.
-
 ---
 
 ### `PUT /nutrition/goal`
@@ -267,10 +299,10 @@ Creates the user's macro goals, or replaces the existing ones. Use the same call
 **Body**
 | Field | Type | Required | Rules |
 |---|---|---|---|
-| `calories_goal` | integer | yes | ≥ 0 |
-| `protein_goal` | integer | yes | ≥ 0 |
-| `carbs_goal` | integer | yes | ≥ 0 |
-| `fat_goal` | integer | yes | ≥ 0 |
+| `calories_goal` | integer | yes | > 0 |
+| `protein_goal` | integer | yes | > 0 |
+| `carbs_goal` | integer | yes | > 0 |
+| `fat_goal` | integer | yes | > 0 |
 
 ```json
 {
@@ -293,9 +325,7 @@ Creates the user's macro goals, or replaces the existing ones. Use the same call
 
 **Errors**
 - `409` `"Could not add user goal"`
-- `422`: a field is missing or negative.
-
-> Don't allow a goal of `0` in the UI. A 0 goal currently crashes the summary endpoint.
+- `422`: a field is missing, or is `0` or negative.
 
 ---
 
@@ -313,7 +343,7 @@ There can only be **one sleep entry per user per day**. Logging the same `wake_d
 | `wake_date` | date `YYYY-MM-DD` | yes | the morning they woke up |
 | `bed_time` | time `HH:MM` | yes | 24-hour clock |
 | `wake_time` | time `HH:MM` | yes | 24-hour clock |
-| `quality` | integer | yes | rating 1–5 |
+| `quality` | integer | yes | rating 1–5 (anything else returns `422`) |
 | `notes` | string | yes | send `""` if the user wrote nothing |
 
 ```json
@@ -341,8 +371,7 @@ There can only be **one sleep entry per user per day**. Logging the same `wake_d
 
 **Errors**
 - `409` `"Could not create sleep record"`: usually means that day already has an entry.
-
-> ⚠️ Currently broken on the backend. See "Known backend issues" below.
+- `422`: a field is missing or `quality` is outside 1–5.
 
 ---
 
@@ -506,16 +535,3 @@ With no notes, send `{}` or `{ "notes": null }`. The body itself is still requir
 **Errors**
 - `404` `"Workout not found"`
 - `409` `"Can not save a non-finished workout"`: call `finish-workout` first.
-
----
-
-## Known backend issues
-
-These are backend bugs, listed so nobody wastes time debugging the frontend. The contract documented above is how the endpoints **will** behave once they're fixed.
-
-| Endpoint | Symptom | Cause |
-|---|---|---|
-| `GET /nutrition/summary` | `500` | Builds the macros with the key `fats`, but the response schema expects `fat`. The goals are also built under `macro_goals_counts` instead of `macro_goals`. |
-| `GET /nutrition/summary` | `500` if any goal is `0` | Divide by zero in the percentage calculation |
-| `POST /nutrition/create-meal` | `500` | Reads `body.fats`, but the request field is `fat` |
-| `POST /sleep/log` | `500` after the row is saved | Response schema has `quality: Field(le=1, ge=5)`, which is impossible (should be `ge=1, le=5`) |

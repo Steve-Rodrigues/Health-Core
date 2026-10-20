@@ -20,7 +20,7 @@ class User_Login_Out(BaseModel):
     created_at: datetime
     current_weight: float | None = None
     goal_weight: float | None = None
-    workouts_per_week_goal: float | None = None
+    workouts_per_week_goal: int | None = None
     sleep_goal: float | None = None
 
 #format take data in from the onboarding survey
@@ -67,10 +67,10 @@ class Create_Meal_Out(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 #format to take in user nutrition goals
 class Create_Nutrition_Goal_In(BaseModel):
-    protein_goal: int = Field(ge=0) #goal must be greater or equal to 0
-    carbs_goal: int = Field(ge=0)
-    fat_goal: int = Field(ge=0)
-    calories_goal: int = Field(ge=0)
+    protein_goal: int = Field(gt=0) #goal must be greater or equal to 0
+    carbs_goal: int = Field(gt=0)
+    fat_goal: int = Field(gt=0)
+    calories_goal: int = Field(gt=0)
 #format to send user nutrition goals back to the client
 class Create_Nutrition_Goal_Out(BaseModel):
     protein_goal: int 
@@ -84,7 +84,7 @@ class Log_Sleep_In(BaseModel):
     wake_date: date
     bed_time: time
     wake_time: time
-    quality: int
+    quality: int = Field(ge=1, le=5) #1-5 rating
     notes: str
 #format to send back sleep data 
 class Log_Sleep_Out(BaseModel):
@@ -92,7 +92,7 @@ class Log_Sleep_Out(BaseModel):
     bed_time: time
     wake_time: time
     duration_mins: int
-    quality: int = Field(le=1, ge=5)
+    quality: int = Field(ge=1,le=5)
     notes: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
