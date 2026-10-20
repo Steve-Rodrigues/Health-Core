@@ -6,10 +6,10 @@ from fastapi import FastAPI, Depends, Request, Response, HTTPException, status
 from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out, Start_Workout_Out
+from sqlalchemy import select, func
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, User_Program
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats
 
 
@@ -159,23 +159,116 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
 
 #********************************* Fitness Section ****************************
 
-#endpoint to start a workout for the active program day
-#***********   note: MOST OF THIS MAY BE WRONG, WORK IN PROGRESS    ****************************
-@app.post('/workout/start', response_model=Start_Workout_Out)
-def start_workout(program_day: int | None = None, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    user_program = db.scalar(select(User_Program).where(User_Program.user_id == user_id).order_by(User_Program.id.desc()))
-    if not user_program:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No workout found")
+#start-workout endpoint
+@app.post('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_201_CREATED)
+def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    result_obj = {} #store the result in here
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
+    if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
+    program = db.scalar(select(Program).where(Program.id==user_program.program_id))
+    if program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
+    #check if there is an active workout before creating another-- tests for double clicks
+    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.completed_at.is_(None)))
+    if workout is None: 
+        workout = Workout(user_id=user_id, program_id=program.id)
+        if user_program.current_day >= program.number_of_days: user_program.current_day = 1
+        else: user_program.current_day += 1
 
-    day = program_day if program_day is not None else user_program.current_day
+    result_obj['name'], result_obj['description'], result_obj['goal'],result_obj['lift_data'] = program.name, program.description, program.goal,[]
 
-    workout = Workout(user_id=user_id, program_id=user_program.program_id, started_at=datetime.now())
     try:
         db.add(workout)
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not start workout")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Unable to create workout')
+    #getting all the exercises/sets/reps from the db for the day and program id
+    all_exercises = db.execute(select(Program_Exercise,Exercise)
+                               .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
+                               .where(Program_Exercise.program_id==program.id, Program_Exercise.day==user_program.current_day)).all()
+    for program_exercise, exercise in all_exercises:
+        curr_exercise = {} #build this and append to lift_data each time-- stores {exercise, exercise_id, sets, reps}
+        curr_exercise['exercise'], curr_exercise['exercise_id'], curr_exercise['sets'], curr_exercise['reps'] = exercise.name,exercise.id,program_exercise.sets,program_exercise.reps
+        result_obj['lift_data'].append(curr_exercise)
     db.refresh(workout)
+    result_obj['workout_id'] = workout.id
+    return result_obj
 
-    return workout
+#Endpoint for when a user completes an exercise-- sends the sets/reps/weight they used. 
+# NOTE: Might change this so they send data after every set they complete
+@app.post('/lifting/{workout_id}/finish-exercise', response_model=Exercise_Data_Out, status_code=status.HTTP_201_CREATED)
+def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    current_workout = db.scalar(select(Workout).where(Workout.id==workout_id, Workout.user_id==user_id)) #checking to see if there is an active workout
+    if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Could not find workout with that ID')
+    if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='There is not an active workout to record in')
+    workout_set = Workout_Set(workout_id=workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
+    try:
+        db.add(workout_set)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not create set')
+    db.refresh(workout_set)
+    return workout_set
+
+#Endpoint for getting the workout summary page info. Happens once the user clicks finish workout
+@app.post('/lifting/{workout_id}/finish-workout', response_model= Workout_Summary_Out, status_code=status.HTTP_200_OK)
+def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    current_workout = db.scalar(select(Workout).where(Workout.id==workout_id,Workout.user_id==user_id))
+    if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Workout does not exist')
+    if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Workout is not active')
+
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id, User_Program.program_id==current_workout.program_id))
+    if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program for this workout not found')
+
+    current_workout.completed_at = func.now() #gets the postgres version of the date, consistent to how we do the start time
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not update the workout end time')
+    db.refresh(current_workout) #gets the updated current workout back with the end time
+    summary_stats = {} #going to hold all of the summary stats from the workout
+    workout_duration = round((current_workout.completed_at - current_workout.started_at).total_seconds() / 60,1) #gets the timedelta obj and gets the total minutes from this calculation
+    summary_stats['duration'] = workout_duration
+    #now get the rest through querying jumps
+    all_completed_exercises = db.scalars(select(Workout_Set).where(Workout_Set.workout_id==workout_id)).all() #gets list of each exercise done
+    summary_stats['number_exercises'] = len({s.exercise_id for s in all_completed_exercises})
+    summary_stats['number_sets'] = sum(s.sets for s in all_completed_exercises)
+    summary_stats['total_volume'] = sum(e.weight*e.reps*e.sets for e in all_completed_exercises)
+    best_exercise = {} #going to hold the exercise of the day-- highest weight used {name, sets, reps, weight}
+    highest_weight = max(all_completed_exercises,key=lambda x: x.weight, default=None) #finds the one with highest weight
+    if highest_weight is not None:
+        best_exercise['sets'],best_exercise['reps'], best_exercise['weight'] = highest_weight.sets, highest_weight.reps, highest_weight.weight
+        e_name = db.scalar(select(Exercise).where(Exercise.id==highest_weight.exercise_id))
+        if e_name is not None: 
+            best_exercise['exercise_name'] = e_name.name
+            summary_stats['best_exercise'] = best_exercise
+        else: summary_stats['best_exercise'] = None
+    #get the workout name and the current day and total days
+    summary_stats['workout_name'],summary_stats['workout_day'],summary_stats['total_days'] = user_program.program.name,user_program.current_day,user_program.program.number_of_days
+    return summary_stats
+
+#endpoint for finalizing the workout-- clicking the save/finish workout button on the summary screen. Only thing being added is the optional notes section to the existing workout row in the db
+@app.patch('/lifting/{workout_id}/submit-workout', status_code=status.HTTP_200_OK)
+def finalize_workout(body: Finalize_Workout_In,workout_id:UUID, user_id: UUID = Depends(get_curr_user), db: Session=Depends(get_db)):
+    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.id==workout_id))
+    if workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Workout not found')
+    elif workout.completed_at is None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Can not save a non-finished workout')
+    if body.notes is not None:
+        workout.notes = body.notes
+        db.commit()
+    return {"data": "success"}
+    
+
+
+
+    
+
+
+
+
+
+    
+    
+
