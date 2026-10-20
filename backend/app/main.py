@@ -75,7 +75,7 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
     macros={'calories':sum(meal.calories for meal in all_meals_day), 
             'protein':sum(meal.protein for meal in all_meals_day), 
             'carbs':sum(meal.carbs for meal in all_meals_day), 
-            'fats':sum(meal.fat for meal in all_meals_day)}
+            'fat':sum(meal.fat for meal in all_meals_day)}
     #nothing to display in this case
     if user_goals is None:
         return {
@@ -96,7 +96,7 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
     return_data = {
         'date': day,
         'macros_consumed_counts': macros,
-        'macro_goals_counts': macro_goals,
+        'macro_goals': macro_goals,
         'macro_consumed_percentage': macro_progress_percent,
         'macro_score': total_progress_percent
     }
@@ -105,7 +105,7 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
 #endpoint to add a meal from user
 @app.post('/nutrition/create-meal', response_model=Create_Meal_Out, status_code=status.HTTP_201_CREATED)
 def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    meal = Meal(meal_name=body.meal_name, protein=body.protein, carbs=body.carbs, calories=body.calories, fat=body.fats, meal_type=body.meal_type, meal_date=date.today(),user_id=user_id)
+    meal = Meal(meal_name=body.meal_name, protein=body.protein, carbs=body.carbs, calories=body.calories, fat=body.fat, meal_type=body.meal_type, meal_date=date.today(),user_id=user_id)
     try:
         db.add(meal)
         db.commit()
@@ -158,23 +158,6 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
     return sleep_log
 
 #*********************************** Lifting Section ***************************************
-
-#endpoint to 
-
-
-    
-
-
-    
-
-
-
-
-
-
-    
-
-    
 
 #start-workout endpoint
 @app.post('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_201_CREATED)
@@ -276,16 +259,3 @@ def finalize_workout(body: Finalize_Workout_In,workout_id:UUID, user_id: UUID = 
         workout.notes = body.notes
         db.commit()
     return {"data": "success"}
-    
-
-
-
-    
-
-
-
-
-
-    
-    
-
