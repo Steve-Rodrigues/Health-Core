@@ -7,7 +7,7 @@
 .venv/
 venv/
 env/
-flutter_build
+.dart_tool
 
 # Python
 __pycache__/
