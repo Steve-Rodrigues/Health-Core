@@ -7,7 +7,7 @@
 .venv/
 venv/
 env/
-.dart_tool
+.dart_tool/
 
 # Python
 __pycache__/
