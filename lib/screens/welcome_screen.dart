@@ -79,11 +79,10 @@ class WelcomeScreen extends StatelessWidget {
                       Positioned(
                         top: -10,
                         right: -10,
-                        child: Image.asset(
-                          'web/icons/Logo.webp',
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.contain,
+                        child: Icon(
+                          Icons.health_and_safety,
+                          color: Color(0xFF0756A8),
+                          size: 100,
                         ),
                       ),
                     ],
