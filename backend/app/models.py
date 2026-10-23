@@ -58,10 +58,14 @@ class Exercise(Base):
     __tablename__ = "exercises"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(), nullable=False) #exersice name
+    name: Mapped[str] = mapped_column(String(), nullable=False, unique=True) #exersice name
     instructions: Mapped[str] = mapped_column(String(), nullable=False) #exersice instructions
-    equipment: Mapped[bool] = mapped_column(Boolean(), default=False) #Marked true if equipment needed
-    level: Mapped[int] = mapped_column(Integer()) #level of exersice-- rated on number system(1-5)
+    equipment: Mapped[str | None] = mapped_column(String()) #holds the equipment needed
+    level: Mapped[str] = mapped_column(String()) #level of exersice-- beginner, intermiediate, expert
+    movement_type: Mapped[str | None] = mapped_column(String())#holds type of movement(push/pull/static)
+    primary_muscle: Mapped[str] = mapped_column(String())#holds the primary muscle its hitting
+    exercise_category: Mapped[str] = mapped_column(String())#holds category of exercise-- like strength, plyos, powerlifting
+
 
 #Stores the program using an exersice along with reps/sets and day used on the program
 class Program_Exercise(Base):
@@ -81,11 +85,10 @@ class Program(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(String(), nullable=False)
-    difficulty: Mapped[int]  = mapped_column(Integer(), nullable=False) #1-5
+    difficulty: Mapped[str]  = mapped_column(String(), nullable=False) #beginner/intermediate/expert
     number_of_days: Mapped[int] = mapped_column(Integer(), nullable=False) #per week-- use this to get the current day
     goal: Mapped[str] = mapped_column(String(), nullable=False) # could be bulk, shredding, etc...
     program_length: Mapped[int | None] = mapped_column(Integer(), nullable=True) #***Might need to change the length convention
-    equipment: Mapped[bool] = mapped_column(Boolean(), default=False) #if needed for this program
 
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='program') #users following this program-- no cascade since RESTRICT blocks deleting a program in use
 
