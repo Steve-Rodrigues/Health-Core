@@ -7,7 +7,15 @@
 .venv/
 venv/
 env/
+
+# Dart / Flutter package and tool metadata
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
 .dart_tool/
+devtools_options.yaml
 
 # Python
 __pycache__/
@@ -20,6 +28,7 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+coverage/
 
 # Database / logs
 *.log

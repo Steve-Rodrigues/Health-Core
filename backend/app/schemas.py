@@ -18,6 +18,7 @@ class User_Signup_Out(BaseModel):
 class User_Login_Out(BaseModel):
     username: str
     created_at: datetime
+    height: float | None = None
     current_weight: float | None = None
     goal_weight: float | None = None
     workouts_per_week_goal: int | None = None
