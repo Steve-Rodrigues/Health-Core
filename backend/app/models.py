@@ -65,6 +65,7 @@ class Exercise(Base):
     movement_type: Mapped[str | None] = mapped_column(String())#holds type of movement(push/pull/static)
     primary_muscle: Mapped[str] = mapped_column(String())#holds the primary muscle its hitting
     exercise_category: Mapped[str] = mapped_column(String())#holds category of exercise-- like strength, plyos, powerlifting
+    mechanic: Mapped[str | None] = mapped_column(String(), nullable=True)#compound or isolation-- used to pick main lifts vs accessories
 
 
 #Stores the program using an exersice along with reps/sets and day used on the program
@@ -77,6 +78,7 @@ class Program_Exercise(Base):
     day: Mapped[int] = mapped_column(Integer(), nullable=False) #this is a column for the day of the exercise in the program, it is an integer
     sets: Mapped[int] = mapped_column(Integer(), nullable=False) #this is a column for the number of sets in the exercise, it is an integer
     reps: Mapped[int] = mapped_column(Integer(), nullable=False) #this is a column for the number of reps in the exercise, it is an integer
+    order: Mapped[int] = mapped_column(Integer(), nullable=False, server_default='0') #position of the exercise within its day-- main lifts first
 
 #Stores all of the programs we create
 class Program(Base):
@@ -89,6 +91,8 @@ class Program(Base):
     number_of_days: Mapped[int] = mapped_column(Integer(), nullable=False) #per week-- use this to get the current day
     goal: Mapped[str] = mapped_column(String(), nullable=False) # could be bulk, shredding, etc...
     program_length: Mapped[int | None] = mapped_column(Integer(), nullable=True) #***Might need to change the length convention
+    equipment_level: Mapped[str] = mapped_column(String(), nullable=False, server_default='gym') #bodyweight/home/gym-- each level includes the ones before it
+    split: Mapped[str] = mapped_column(String(), nullable=False, server_default='full_body') #full_body/upper_lower/push_pull_legs/hybrid
 
     user_programs: Mapped[list["User_Program"]] = relationship(back_populates='program') #users following this program-- no cascade since RESTRICT blocks deleting a program in use
 
