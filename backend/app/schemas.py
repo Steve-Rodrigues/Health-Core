@@ -2,7 +2,7 @@
 from datetime import datetime, date, time
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
-
+from typing import Literal #values in the Literal array must be only what we set
 #on signup the backend is only expecting the client to send over the username because we get the id from the dependency
 class User_Signup_In(BaseModel):
     username: str = Field(min_length=3, max_length=20)
@@ -145,3 +145,26 @@ class Workout_Summary_Out(BaseModel):
 #format for recieving the notes from the client when finish workout is pressed in summary
 class Finalize_Workout_In(BaseModel):
     notes: str | None = None
+
+#format that we take in the create-program survey results 
+class Survey_Results_In(BaseModel):
+    goal: Literal['build_muscle','get_stronger','lose_fat','general_fitness'] #same goals the seeded programs use
+    experience: Literal['beginner','intermediate','expert']
+    days_available: int = Field(ge=2, le=6)
+    equipment: list[Literal['machine','barbell','exercise ball','e-z curl bar','medicine ball','dumbbell','bands','foam roll','kettlebells','cable']] #every item the user checked-- can be empty
+
+#format each program will be in that we send to the client after choosing the top matches
+class Program_Out(BaseModel):
+    program_id: UUID
+    name: str
+    description: str
+    difficulty: str
+    number_of_days: int
+    goal: str
+    program_length: int | None
+    equipment_level: str
+    split: str
+    score: float
+#format to send the 3 programs over to the client after we find the top 3 matches
+class Top_3_Programs_Out(BaseModel):
+    programs:list[Program_Out]
