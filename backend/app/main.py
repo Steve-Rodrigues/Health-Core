@@ -7,10 +7,10 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
-from app.helper_funcs import get_nutrition_stats
+from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
 
 
 app = FastAPI()
@@ -259,3 +259,35 @@ def finalize_workout(body: Finalize_Workout_In,workout_id:UUID, user_id: UUID = 
         workout.notes = body.notes
         db.commit()
     return {"data": "success"}
+
+#endpoint that takes in the program-creation survey results and gives the top 3 matches through a weighted algorithm
+@app.post('/lifting/generate-program', response_model=Top_3_Programs_Out)
+def find_program_matches(body:Survey_Results_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    equipment_level = get_equipment_level(body.equipment) #stores the bracket the user is put into for their level of equipment they have available
+    equipment_threshold, experience_threshold = Equipment_Buckets[equipment_level], Experience_Buckets[body.experience] #gets the threshold for what the programs must be less than or equal to
+
+    allowed_equipment = [k for k,v in Equipment_Buckets.items() if v <= equipment_threshold]
+    allowed_experience = [k for k,v in Experience_Buckets.items() if v <= experience_threshold]
+    candidates = db.scalars(select(Program).where(Program.equipment_level.in_(allowed_equipment), Program.difficulty.in_(allowed_experience),Program.number_of_days<=body.days_available)).all()#gets programs that meet the min requirements-- the user is elegible for all of them
+    if not candidates: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program does not exist')
+    scored_programs = [
+        (score_program(p,equipment_level,body.experience,body.days_available,body.goal),p) for p in candidates
+    ]
+    scored_programs.sort(key=lambda p: p[0], reverse=True) #sorts the programs in order of best match to worst (highest to lowest score)
+    return {
+        "programs": [
+            {
+                "program_id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "difficulty": p.difficulty,
+                "number_of_days": p.number_of_days,
+                "goal": p.goal,
+                "program_length": p.program_length,
+                "equipment_level": p.equipment_level,
+                'split': p.split,
+                "score": round(score),
+            }
+            for score, p in scored_programs[:3]
+        ]
+    }
