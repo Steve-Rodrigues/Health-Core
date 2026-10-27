@@ -72,3 +72,5 @@ profile
 .tags*
 **/.vagrant/
 Icon?
+# Widget Preview related
+.widget_preview/

@@ -104,6 +104,7 @@ If the body doesn't match what the endpoint expects (a missing field, wrong type
 | POST | `/lifting/{workout_id}/finish-workout` | End the workout and get the summary |
 | PATCH | `/lifting/{workout_id}/submit-workout` | Save notes from the summary screen |
 | POST | `/lifting/generate-program` | Get the top 3 program matches from the program survey |
+| POST | `/lifting/{program_id}/choose-program` | Assign the program the user picked |
 
 ---
 
@@ -543,7 +544,7 @@ With no notes, send `{}` or `{ "notes": null }`. The body itself is still requir
 
 Takes the answers from the create-program survey and returns the **3 programs that best match** them, best match first.
 
-This only **suggests** programs. It does not assign one to the user, so `start-workout` will still return `404` until a program is assigned.
+This only **suggests** programs. It does not assign one to the user, so `start-workout` will still return `404` until the user picks one with [`choose-program`](#post-liftingprogram_idchoose-program).
 
 **How matching works**
 1. The checked `equipment` is turned into an equipment level: `bodyweight`, `home` or `gym`.
@@ -594,7 +595,7 @@ This only **suggests** programs. It does not assign one to the user, so `start-w
 | Field | Meaning |
 |---|---|
 | `programs` | up to 3 programs, sorted by `score` highest first. Can be fewer than 3 if not enough programs qualify |
-| `program_id` | keep this to assign/start the program |
+| `program_id` | send this to `choose-program` when the user picks the program |
 | `difficulty` | `"beginner"`, `"intermediate"` or `"expert"` |
 | `number_of_days` | workout days per week |
 | `goal` | same values as the request's `goal` |
@@ -606,3 +607,35 @@ This only **suggests** programs. It does not assign one to the user, so `start-w
 **Errors**
 - `404` `"Program does not exist"`: no program fits the user's equipment, experience and days.
 - `422`: a field is missing, `days_available` is outside 2–6, or a value isn't one of the allowed options.
+
+---
+
+### `POST /lifting/{program_id}/choose-program`
+
+Call when the user picks one of the programs from `generate-program`. This assigns that program to the user, so `start-workout` starts working afterwards.
+
+A user can only have **one program at a time**. Choosing a new program replaces the old one, and the user starts again from day 1 of the new program.
+
+**Path:** `program_id` from one of the programs returned by `generate-program`.
+**Body:** none. Don't send the program details; the backend looks them up from `program_id`.
+
+```
+POST /lifting/3c7e9a10-2b4d-4f6e-8a1c-5d2e7f9b0a11/choose-program
+```
+
+```dart
+final res = await apiPost('/lifting/${program['program_id']}/choose-program', {});
+if (res.statusCode == 201) {
+  // program saved: go to the lifting home / start-workout screen
+}
+```
+
+**Response `201`**
+```json
+{ "status": "success" }
+```
+
+**Errors**
+- `404` `"Program not found"`: no program has that ID. The user's current program is left unchanged.
+- `409` `"Could not save program"`
+- `422`: `program_id` in the URL isn't a valid UUID.
