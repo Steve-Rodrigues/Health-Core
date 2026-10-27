@@ -7,7 +7,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
@@ -291,3 +291,18 @@ def find_program_matches(body:Survey_Results_In, user_id: UUID = Depends(get_cur
             for score, p in scored_programs[:3]
         ]
     }
+#endpoint to save the chosen program in the database for the user
+@app.post('/lifting/{program_id}/choose-program', status_code = status.HTTP_201_CREATED)
+def choose_program(program_id:UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    existing = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
+    if existing: db.delete(existing) #cant have more than one program at a time
+    program = db.scalar(select(Program).where(Program.id == program_id))
+    if not program: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program not found')
+    user_program = User_Program(goal=program.goal,program_id=program_id,user_id=user_id,experience_level=program.difficulty,days_available=program.number_of_days)
+    try:
+        db.add(user_program)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not save program')
+    return {'status':'success'}

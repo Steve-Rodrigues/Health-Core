@@ -106,9 +106,8 @@ class User_Program(Base):
     program_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('programs.id', ondelete='RESTRICT')) #program it comes from-- CAN NOT DELETE PROGRAM IF IN USE HERE
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')) #user the program is for
     current_day: Mapped[int] = mapped_column(Integer(), default=0) #current day user is on-- always add 1 and check if adding 1 is over the number of days of our program, if so go back to day 1
-    experience_level:Mapped[int] = mapped_column(Integer(), nullable=False) #takes in level from frontend mult choice
+    experience_level:Mapped[str] = mapped_column(String(), nullable=False) #beginner/intermediate/expert-- matches the program difficulty
     days_available: Mapped[int] = mapped_column(Integer(), nullable=False) #1-6 for days available to workout
-    equipment_available: Mapped[bool] = mapped_column(Boolean(), nullable=False) #whether they have equipment available in their gym
     program: Mapped["Program"] = relationship(back_populates='user_programs') #access to the program
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
 #*********** Nutrition Section *****************

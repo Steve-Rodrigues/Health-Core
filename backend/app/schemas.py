@@ -168,3 +168,16 @@ class Program_Out(BaseModel):
 #format to send the 3 programs over to the client after we find the top 3 matches
 class Top_3_Programs_Out(BaseModel):
     programs:list[Program_Out]
+
+#format to take the chosen program in from the client after the user chooses one
+class Program_In(BaseModel):
+    program_id: UUID
+    name: str
+    description: str
+    difficulty: str
+    number_of_days: int
+    goal: str
+    program_length: int | None
+    equipment_level: str
+    split: str
+    score: float   
