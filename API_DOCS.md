@@ -103,6 +103,7 @@ If the body doesn't match what the endpoint expects (a missing field, wrong type
 | POST | `/lifting/{workout_id}/finish-exercise` | Record one finished exercise |
 | POST | `/lifting/{workout_id}/finish-workout` | End the workout and get the summary |
 | PATCH | `/lifting/{workout_id}/submit-workout` | Save notes from the summary screen |
+| POST | `/lifting/generate-program` | Get the top 3 program matches from the program survey |
 
 ---
 
@@ -535,3 +536,73 @@ With no notes, send `{}` or `{ "notes": null }`. The body itself is still requir
 **Errors**
 - `404` `"Workout not found"`
 - `409` `"Can not save a non-finished workout"`: call `finish-workout` first.
+
+---
+
+### `POST /lifting/generate-program`
+
+Takes the answers from the create-program survey and returns the **3 programs that best match** them, best match first.
+
+This only **suggests** programs. It does not assign one to the user, so `start-workout` will still return `404` until a program is assigned.
+
+**How matching works**
+1. The checked `equipment` is turned into an equipment level: `bodyweight`, `home` or `gym`.
+2. Only programs the user can actually do are considered: equipment level and difficulty at or below the user's, and `number_of_days` ≤ `days_available`.
+3. Each of those programs gets a 0–100 score. Goal is weighted most (55), then experience (25), days (12) and equipment (8). A program that matches exactly on all four scores 100.
+
+**Body**
+| Field | Type | Required | Allowed values |
+|---|---|---|---|
+| `goal` | string | yes | `"build_muscle"`, `"get_stronger"`, `"lose_fat"`, `"general_fitness"` |
+| `experience` | string | yes | `"beginner"`, `"intermediate"`, `"expert"` |
+| `days_available` | integer | yes | 2–6 (days per week) |
+| `equipment` | array of strings | yes | any of `"machine"`, `"barbell"`, `"exercise ball"`, `"e-z curl bar"`, `"medicine ball"`, `"dumbbell"`, `"bands"`, `"foam roll"`, `"kettlebells"`, `"cable"` |
+
+- Values are case-sensitive and must be spelled exactly as above (including spaces, e.g. `"e-z curl bar"`). Anything else returns `422`.
+- `equipment` is every item the user checked. Send `[]` if they checked nothing; they'll get bodyweight programs. The field itself must still be sent.
+
+```json
+{
+  "goal": "build_muscle",
+  "experience": "intermediate",
+  "days_available": 4,
+  "equipment": ["dumbbell", "kettlebells", "barbell", "cable", "machine", "bands"]
+}
+```
+
+**Response `200`**
+```json
+{
+  "programs": [
+    {
+      "program_id": "3c7e9a10-2b4d-4f6e-8a1c-5d2e7f9b0a11",
+      "name": "Gym Build Muscle - 4-Day Upper/Lower",
+      "description": "Moderate reps and steady volume to build muscle. An intermediate 4-day upper/lower program using a full gym, run for 10 weeks.",
+      "difficulty": "intermediate",
+      "number_of_days": 4,
+      "goal": "build_muscle",
+      "program_length": 10,
+      "equipment_level": "gym",
+      "split": "upper_lower",
+      "score": 100.0
+    },
+    { "...": "2nd best match, same shape" },
+    { "...": "3rd best match, same shape" }
+  ]
+}
+```
+| Field | Meaning |
+|---|---|
+| `programs` | up to 3 programs, sorted by `score` highest first. Can be fewer than 3 if not enough programs qualify |
+| `program_id` | keep this to assign/start the program |
+| `difficulty` | `"beginner"`, `"intermediate"` or `"expert"` |
+| `number_of_days` | workout days per week |
+| `goal` | same values as the request's `goal` |
+| `program_length` | length in weeks; can be `null` |
+| `equipment_level` | `"bodyweight"`, `"home"` or `"gym"` |
+| `split` | `"full_body"`, `"upper_lower"`, `"push_pull_legs"` or `"hybrid"` |
+| `score` | match score 0–100, rounded to a whole number (comes back as e.g. `87.0`, so read it as `num`/`double`) |
+
+**Errors**
+- `404` `"Program does not exist"`: no program fits the user's equipment, experience and days.
+- `422`: a field is missing, `days_available` is outside 2–6, or a value isn't one of the allowed options.
