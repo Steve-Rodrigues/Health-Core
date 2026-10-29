@@ -31,6 +31,14 @@ class User_Profile_Survey(BaseModel):
     sleep_goal: float | None = None
     height: float | None = None
 
+#updating goals from the profile page, frontend sends every field so none are optional
+class User_Goals_Update(BaseModel):
+    current_weight: float
+    goal_weight: float
+    workouts_per_week_goal: int
+    sleep_goal: float
+    height: float
+
 #for the macros dict
 class Macros(BaseModel):
     calories: float

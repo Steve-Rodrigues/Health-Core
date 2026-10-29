@@ -7,7 +7,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
@@ -63,6 +63,22 @@ def onboardSurvey(body: User_Profile_Survey, db: Session= Depends(get_db), user_
     db.refresh(user)
     return user
 
+#updating the user's personal goals 
+@app.put('/users/update-goals', status_code=status.HTTP_200_OK)
+def update_goals(body: User_Goals_Update, db: Session = Depends(get_db), user_id: UUID = Depends(get_curr_user)):
+    user = db.scalar(select(User).where(User.id==user_id))
+    if not user: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.current_weight = body.current_weight
+    user.goal_weight = body.goal_weight
+    user.workouts_per_week_goal = body.workouts_per_week_goal
+    user.sleep_goal = body.sleep_goal
+    user.height = body.height
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not update")
+    return {"status": "success"}
 # *********************** Nutrition Section ******************************
 
 #Nutrition summary page by day from our calender switch buttons
@@ -306,3 +322,4 @@ def choose_program(program_id:UUID, user_id: UUID = Depends(get_curr_user), db: 
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not save program')
     return {'status':'success'}
+
