@@ -3,17 +3,26 @@ from uuid import UUID
 
 from app.auth_dependency import get_curr_user
 from fastapi import FastAPI, Depends, Request, Response, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
 
 
 app = FastAPI()
+
+#allows the flutter web app (served from a different localhost port) to call the api because we are running over browser during testing
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get('/')
 def test():
@@ -322,4 +331,24 @@ def choose_program(program_id:UUID, user_id: UUID = Depends(get_curr_user), db: 
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not save program')
     return {'status':'success'}
+
+#endpoint to get the program the user is currently on so the client can show it
+@app.get('/lifting/my-program', response_model=My_Program_Out)
+def get_my_program(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
+    if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
+    program = user_program.program
+    return {
+        "program_id": program.id,
+        "name": program.name,
+        "description": program.description,
+        "difficulty": program.difficulty,
+        "number_of_days": program.number_of_days,
+        "goal": program.goal,
+        "program_length": program.program_length,
+        "equipment_level": program.equipment_level,
+        "split": program.split,
+        "current_day": user_program.current_day,
+        "next_day": user_program.current_day % program.number_of_days + 1, #same wraparound start-workout uses
+    }
 

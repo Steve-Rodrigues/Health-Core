@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+import '../services/api.dart';
 import 'fitness_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -41,7 +42,11 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      await ApiClient().ensureUser();
     } on AuthException catch (error) {
+      if (mounted) _showError(error.message);
+      return;
+    } on ApiException catch (error) {
       if (mounted) _showError(error.message);
       return;
     } finally {

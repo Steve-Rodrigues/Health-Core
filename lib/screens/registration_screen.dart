@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+import '../services/api.dart';
 import 'fitness_survey_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class RegistrationScreen extends StatefulWidget {
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -22,6 +24,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -44,8 +47,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       response = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        // Kept in Supabase metadata so the backend user can be created on
+        // first login when email confirmation delays the session.
+        data: {'username': _usernameController.text.trim()},
       );
+      if (response.session != null) await ApiClient().ensureUser();
     } on AuthException catch (error) {
+      if (mounted) _showError(error.message);
+      return;
+    } on ApiException catch (error) {
       if (mounted) _showError(error.message);
       return;
     } finally {
@@ -141,6 +151,29 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 style: TextStyle(color: Colors.black54, fontSize: 16),
               ),
               const SizedBox(height: 32),
+              TextFormField(
+                controller: _usernameController,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newUsername],
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixIcon: Icon(Icons.person_outline),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+                  if (name.length < 3 || name.length > 20) {
+                    return 'Use 3 to 20 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,

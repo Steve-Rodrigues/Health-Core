@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'fitness_goals_screen.dart';
+import 'program_survey_screen.dart';
+import '../services/api.dart';
 
 class FitnessDashboardScreen extends StatefulWidget {
   const FitnessDashboardScreen({super.key, this.onTabSelected});
@@ -34,6 +36,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   );
 
   int _selectedTab = 0;
+  Map<String, dynamic>? _program;
+  bool _isLoadingProgram = true;
 
   static const _consistencyData = [
     0.16,
@@ -58,6 +62,37 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       context,
       MaterialPageRoute(builder: (_) => const FitnessGoalsScreen()),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgram();
+  }
+
+  Future<void> _loadProgram() async {
+    setState(() => _isLoadingProgram = true);
+    Map<String, dynamic>? program;
+    try {
+      program = await ApiClient().getMyProgram();
+    } on ApiException {
+      // Leave the card in its "no program" state if the backend is unreachable.
+      program = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _program = program;
+      _isLoadingProgram = false;
+    });
+  }
+
+  Future<void> _openProgramSurvey() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProgramSurveyScreen()),
+    );
+    // Picking a program in the survey changes what this card should show.
+    await _loadProgram();
   }
 
   @override
@@ -166,6 +201,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           textAlign: TextAlign.center,
           style: _headingStyle(29),
         ),
+        const SizedBox(height: 6),
+        _buildProgramSummary(),
         const SizedBox(height: 10),
         Align(
           alignment: Alignment.center,
@@ -195,24 +232,81 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-  Widget _buildStartWorkoutButton() {
-    return Expanded(
-      child: Container(
-        width: double.infinity,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4F9FD),
-          borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: Colors.black54),
+  Widget _buildProgramSummary() {
+    if (_isLoadingProgram) {
+      return const SizedBox(
+        height: 38,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: white),
+          ),
         ),
-        child: const Text(
-          'Start Workout!',
+      );
+    }
+
+    final program = _program;
+    if (program == null) {
+      return const Text(
+        'No program yet. Find one to get started.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: lightBlue, fontSize: 14),
+      );
+    }
+
+    return Column(
+      children: [
+        Text(
+          program['name'] as String,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 21,
-            fontWeight: FontWeight.bold,
+          style: const TextStyle(
+            color: white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Next up: Day ${program['next_day']} of ${program['number_of_days']}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: lightBlue, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStartWorkoutButton() {
+    final hasProgram = _program != null;
+
+    return Expanded(
+      child: Material(
+        color: const Color(0xFFF4F9FD),
+        borderRadius: BorderRadius.circular(40),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(40),
+          // Starting a workout is not wired up yet, so only the empty state
+          // has an action for now.
+          onTap: hasProgram || _isLoadingProgram ? null : _openProgramSurvey,
+          child: Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(color: Colors.black54),
+            ),
+            child: Text(
+              hasProgram || _isLoadingProgram
+                  ? 'Start Workout!'
+                  : 'Find a program',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 21,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),
@@ -227,6 +321,11 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           label: 'Exercises',
           icon: Icons.fitness_center,
           onTap: _showExerciseLibraryMessage,
+        ),
+        _buildHeaderAction(
+          label: 'Programs',
+          icon: Icons.list_alt_rounded,
+          onTap: _openProgramSurvey,
         ),
         _buildHeaderAction(
           label: 'Goals',

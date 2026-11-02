@@ -178,6 +178,20 @@ class Program_Out(BaseModel):
 class Top_3_Programs_Out(BaseModel):
     programs:list[Program_Out]
 
+#format we send the users current program to the client-- next_day is the day start-workout will load next
+class My_Program_Out(BaseModel):
+    program_id: UUID
+    name: str
+    description: str
+    difficulty: str
+    number_of_days: int
+    goal: str
+    program_length: int | None
+    equipment_level: str
+    split: str
+    current_day: int
+    next_day: int
+
 #format to take the chosen program in from the client after the user chooses one
 class Program_In(BaseModel):
     program_id: UUID
