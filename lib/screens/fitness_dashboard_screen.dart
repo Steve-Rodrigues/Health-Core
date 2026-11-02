@@ -232,6 +232,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
+<<<<<<< HEAD
   Widget _buildProgramSummary() {
     if (_isLoadingProgram) {
       return const SizedBox(
@@ -307,6 +308,26 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+=======
+  Widget _buildStartWorkoutButton() {
+    return Expanded(
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F9FD),
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: Colors.black54),
+        ),
+        child: const Text(
+          'Start Workout!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 21,
+            fontWeight: FontWeight.bold,
+>>>>>>> db38013 (Implemented Fitness Dashboard and Survey, partial backend connected)
           ),
         ),
       ),

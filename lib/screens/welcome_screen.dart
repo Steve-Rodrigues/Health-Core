@@ -22,6 +22,7 @@ class WelcomeScreen extends StatelessWidget {
               Color(0xFF001D4B),
             ],
           ),
+          
         ),
         child: SafeArea(
           child: SingleChildScrollView(
