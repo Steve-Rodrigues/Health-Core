@@ -5,13 +5,13 @@ import 'registration_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        // Background gradient
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -25,45 +25,43 @@ class WelcomeScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 15,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Welcome heading with HealthCore logo
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Welcome heading container
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 35,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 25,
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 35),
+
+                // Welcome heading with HealthCore logo
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 45,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F7FC),
+                        borderRadius: BorderRadius.circular(35),
+                        border: Border.all(
+                          color: Colors.black,
+                          width: 6,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF2F7FC),
-                          borderRadius: BorderRadius.circular(35),
-                          border: Border.all(
-                            color: Colors.black,
-                            width: 6,
-                          ),
-                        ),
-                        child: const Column(
-                          children: [
-                            SizedBox(height: 15),
-                            Text(
-                              'Welcome to\nHealthCore',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontFamily: 'serif',
-                                fontSize: 36,
-                                color: Colors.black,
-                                decoration: TextDecoration.underline,
-                              ),
+                      ),
+                      child: const Column(
+                        children: [
+                          Text(
+                            'Welcome to\nHealthCore',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'serif',
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                              color: Colors.black,
                             ),
                             SizedBox(height: 20),
                             Text(
@@ -121,15 +119,16 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                const SizedBox(height: 15),
 
-                  const Text(
-                    'Already have a login?',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                    ),
+                const Text(
+                  'Already have a login?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                   const SizedBox(height: 25),
                   // Create Account button
