@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'login_screen.dart';
+import 'registration_screen.dart';
+
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
   @override
@@ -90,9 +94,12 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(height: 25),
                   // Login button
                   ElevatedButton(
-                    onPressed: () {
-                      // Login navigation will go here
-                    },
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LoginScreen(),
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF2F7FC),
                       foregroundColor: Colors.black,
@@ -127,9 +134,12 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(height: 25),
                   // Create Account button
                   ElevatedButton(
-                    onPressed: () {
-                      // Sign up navigation will go here
-                    },
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RegistrationScreen(),
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF2F7FC),
                       foregroundColor: Colors.black,
