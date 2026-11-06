@@ -261,7 +261,6 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-<<<<<<< HEAD
   Widget _buildProgramSummary() {
     if (_isLoadingProgram) {
       return const SizedBox(
@@ -315,9 +314,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         borderRadius: BorderRadius.circular(40),
         child: InkWell(
           borderRadius: BorderRadius.circular(40),
-          // Starting a workout is not wired up yet, so only the empty state
-          // has an action for now.
-onTap: hasProgram ? _startWorkout : _openProgramSurvey,
+          onTap: hasProgram ? _startWorkout : _openProgramSurvey,
           child: Container(
             width: double.infinity,
             alignment: Alignment.center,
@@ -337,26 +334,6 @@ onTap: hasProgram ? _startWorkout : _openProgramSurvey,
                 fontWeight: FontWeight.bold,
               ),
             ),
-=======
-  Widget _buildStartWorkoutButton() {
-    return Expanded(
-      child: Container(
-        width: double.infinity,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4F9FD),
-          borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: Colors.black54),
-        ),
-        child: const Text(
-          'Start Workout!',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 21,
-            fontWeight: FontWeight.bold,
->>>>>>> db38013 (Implemented Fitness Dashboard and Survey, partial backend connected)
           ),
         ),
       ),

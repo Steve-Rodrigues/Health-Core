@@ -229,7 +229,7 @@ class _MealDialogState extends State<_MealDialog> {
   final _protein = TextEditingController(text: '0');
   final _carbs = TextEditingController(text: '0');
   final _fat = TextEditingController(text: '0');
-  String _type = 'meal';
+  String _type = 'breakfast';
 
   @override
   void dispose() {
@@ -268,14 +268,17 @@ class _MealDialogState extends State<_MealDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
-          onPressed: () => Navigator.pop(context, {
-            'name': _name.text.trim(),
-            'type': _type,
-            'calories': int.tryParse(_calories.text) ?? 0,
-            'protein': int.tryParse(_protein.text) ?? 0,
-            'carbs': int.tryParse(_carbs.text) ?? 0,
-            'fat': int.tryParse(_fat.text) ?? 0,
-          }),
+          onPressed: () {
+            if (_name.text.trim().isEmpty) return;
+            Navigator.pop(context, {
+              'name': _name.text.trim(),
+              'type': _type,
+              'calories': int.tryParse(_calories.text) ?? 0,
+              'protein': int.tryParse(_protein.text) ?? 0,
+              'carbs': int.tryParse(_carbs.text) ?? 0,
+              'fat': int.tryParse(_fat.text) ?? 0,
+            });
+          },
           child: const Text('Save'),
         ),
       ],
