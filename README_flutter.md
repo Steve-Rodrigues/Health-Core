@@ -1,6 +1,24 @@
-# healthcore
+# HealthCore
 
-A new Flutter project.
+## Supabase configuration
+
+The Flutter app reads Supabase configuration from compile-time Dart defines.
+The publishable key is intentionally not stored in tracked Dart source.
+
+Run the app from a terminal with:
+
+```shell
+flutter run \
+  --dart-define=SUPABASE_URL=https://googertfgiyanznyazbo.supabase.co \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+```
+
+In VS Code, use the `HealthCore` launch profile in
+[.vscode/launch.json](.vscode/launch.json). That local file is ignored so
+each developer can supply their own key.
+
+Use only a Supabase publishable/anon key in the client. Never use a
+service-role key in Flutter or commit credentials to the repository.
 
 ## Getting Started
 
