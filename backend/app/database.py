@@ -4,7 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.config import settings #needed for the db url
 
-engine = create_engine(settings.database_url)
+engine = create_engine(
+    settings.database_url,
+    connect_args={"sslmode": "require"},
+    pool_pre_ping=True,
+)
 
 SessionLocal = sessionmaker(bind=engine) #calling this creates the workspace to use the db
 
@@ -15,6 +19,5 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 

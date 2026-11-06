@@ -109,11 +109,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
                       const SizedBox(width: 10),
 
-                      Image.asset(
-                        'web/icons/Logo.webp',
-                        width: 90,
-                        height: 90,
-                        fit: BoxFit.contain,
+                      const Icon(
+                        Icons.health_and_safety,
+                        color: Color(0xFF0756A8),
+                        size: 90,
                       ),
                     ],
                   ),

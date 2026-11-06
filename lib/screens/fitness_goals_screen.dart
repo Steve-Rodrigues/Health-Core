@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,8 +7,7 @@ class FitnessGoalsScreen extends StatefulWidget {
   const FitnessGoalsScreen({super.key});
 
   @override
-  State<FitnessGoalsScreen> createState() =>
-      _FitnessGoalsScreenState();
+  State<FitnessGoalsScreen> createState() => _FitnessGoalsScreenState();
 }
 
 class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
@@ -17,7 +15,6 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   static const Color primaryBlue = Color(0xFF086AC7);
   static const Color lightBlue = Color(0xFFC2DFF2);
   static const Color background = Color(0xFFF2F7FC);
-  static const Color textColor = Color(0xFF203626);
 
   final _formKey = GlobalKey<FormState>();
   final _profileService = FitnessProfileService();
@@ -49,18 +46,13 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
   }
 
   String _formatNumber(double value) {
-    return value.toStringAsFixed(2).replaceFirst(
-          RegExp(r'\.?0+$'),
-          '',
-        );
+    return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
   double _convertWeight(double value, String newUnit) {
     if (_weightUnit == newUnit) return value;
 
-    return newUnit == 'lbs'
-        ? value * 2.2046226218
-        : value / 2.2046226218;
+    return newUnit == 'lbs' ? value * 2.2046226218 : value / 2.2046226218;
   }
 
   void _changeWeightUnit(String newUnit) {
@@ -71,13 +63,13 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
 
     setState(() {
       if (weight != null && weight.isFinite) {
-        _weightController.text =
-            _formatNumber(_convertWeight(weight, newUnit));
+        _weightController.text = _formatNumber(_convertWeight(weight, newUnit));
       }
 
       if (target != null && target.isFinite) {
-        _targetWeightController.text =
-            _formatNumber(_convertWeight(target, newUnit));
+        _targetWeightController.text = _formatNumber(
+          _convertWeight(target, newUnit),
+        );
       }
 
       _weightUnit = newUnit;
@@ -95,19 +87,18 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       if (profile != null) {
         setState(() {
           _hasProfile = true;
-          _weightController.text =
-              _formatNumber((profile['weight'] as num).toDouble());
-          _heightController.text =
-              _formatNumber((profile['height_cm'] as num).toDouble());
-          _targetWeightController.text =
-              _formatNumber(
-                (profile['target_weight'] as num).toDouble(),
-              );
+          _weightController.text = _formatNumber(
+            (profile['weight'] as num).toDouble(),
+          );
+          _heightController.text = _formatNumber(
+            (profile['height_cm'] as num).toDouble(),
+          );
+          _targetWeightController.text = _formatNumber(
+            (profile['target_weight'] as num).toDouble(),
+          );
           _weightUnit = profile['weight_unit'] as String;
-          _sleepGoal =
-              (profile['sleep_goal_hours'] as num).toDouble();
-          _workoutsPerWeek =
-              (profile['workouts_per_week'] as num).toInt();
+          _sleepGoal = (profile['sleep_goal_hours'] as num).toDouble();
+          _workoutsPerWeek = (profile['workouts_per_week'] as num).toInt();
         });
       }
     } catch (error) {
@@ -117,9 +108,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Could not load your saved goals. Please try again.',
-          ),
+          content: Text('Could not load your saved goals. Please try again.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -163,10 +152,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       suffixText: unit,
       filled: true,
       fillColor: background,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 16,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: lightBlue),
@@ -177,10 +163,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: primaryBlue,
-          width: 1.5,
-        ),
+        borderSide: const BorderSide(color: primaryBlue, width: 1.5),
       ),
     );
   }
@@ -208,32 +191,19 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
-            FilteringTextInputFormatter.allow(
-              RegExp(r'^\d*\.?\d*'),
-            ),
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
           ],
-          decoration: _inputDecoration(
-            hint: hint,
-            unit: unit,
-          ),
-          validator: (value) => _validateNumber(
-            value,
-            label: field,
-            min: min,
-            max: max,
-          ),
+          decoration: _inputDecoration(hint: hint, unit: unit),
+          validator: (value) =>
+              _validateNumber(value, label: field, min: min, max: max),
         ),
       ],
     );
   }
 
-  Widget _card({
-    required Widget child,
-  }) {
+  Widget _card({required Widget child}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -268,18 +238,12 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle(
-            'Body measurements',
-            Icons.monitor_weight_outlined,
-          ),
+          _sectionTitle('Body measurements', Icons.monitor_weight_outlined),
           const SizedBox(height: 22),
 
           const Text(
             'Weight unit',
-            style: TextStyle(
-              color: navy,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: navy, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 10),
 
@@ -287,14 +251,8 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
             width: double.infinity,
             child: SegmentedButton<String>(
               segments: const [
-                ButtonSegment(
-                  value: 'kg',
-                  label: Text('Kilograms (kg)'),
-                ),
-                ButtonSegment(
-                  value: 'lbs',
-                  label: Text('Pounds (lbs)'),
-                ),
+                ButtonSegment(value: 'kg', label: Text('Kilograms (kg)')),
+                ButtonSegment(value: 'lbs', label: Text('Pounds (lbs)')),
               ],
               selected: {_weightUnit},
               onSelectionChanged: (selection) {
@@ -309,10 +267,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
           const SizedBox(height: 8),
           const Text(
             'Switching units automatically converts both weights.',
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 22),
 
@@ -369,9 +324,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                _sleepGoal.toStringAsFixed(
-                  _sleepGoal % 1 == 0 ? 0 : 1,
-                ),
+                _sleepGoal.toStringAsFixed(_sleepGoal % 1 == 0 ? 0 : 1),
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -413,10 +366,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle(
-            'Weekly workouts',
-            Icons.fitness_center,
-          ),
+          _sectionTitle('Weekly workouts', Icons.fitness_center),
           const SizedBox(height: 10),
           const Text(
             'Choose how many days you want to train each week.',
@@ -518,26 +468,18 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
         elevation: 0,
         title: const Text(
           'My Fitness Goals',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: primaryBlue,
-              ),
-            )
+          ? const Center(child: CircularProgressIndicator(color: primaryBlue))
           : Form(
               key: _formKey,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
                   Text(
-                    _hasProfile
-                        ? 'Update your goals.'
-                        : 'Set your goals.',
+                    _hasProfile ? 'Update your goals.' : 'Set your goals.',
                     style: const TextStyle(
                       color: navy,
                       fontSize: 29,
@@ -574,8 +516,9 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryBlue,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            primaryBlue.withValues(alpha: 0.6),
+                        disabledBackgroundColor: primaryBlue.withValues(
+                          alpha: 0.6,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -610,10 +553,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                   const Text(
                     'Your preferences are saved to your fitness profile.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.black45,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.black45),
                   ),
                 ],
               ),

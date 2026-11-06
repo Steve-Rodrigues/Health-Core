@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'fitness_goals_screen.dart';
+import 'health_screen.dart';
+import 'nutrition_screen.dart';
 import 'program_survey_screen.dart';
+import 'settings_screen.dart';
+import 'workout_flow_screens.dart';
 import '../services/api.dart';
 
 class FitnessDashboardScreen extends StatefulWidget {
@@ -40,21 +44,46 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   bool _isLoadingProgram = true;
 
   static const _consistencyData = [
-    0.16,
-    0.73,
-    0.43,
-    0.68,
-    0.64,
-    0.40,
-    1.00,
-    0.70,
-    1.03,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
   ];
   static const _personalBests = ['—', '—', '—', '—'];
 
   void _selectTab(int index) {
     setState(() => _selectedTab = index);
     widget.onTabSelected?.call(index);
+    if (index == 3) {
+      _openSettings();
+    } else if (index == 1) {
+      _openPage(const NutritionScreen());
+    } else if (index == 2) {
+      _openPage(const HealthScreen());
+    }
+  }
+
+  Future<void> _openPage(Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+    if (mounted) setState(() => _selectedTab = 0);
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+    if (mounted) {
+      setState(() => _selectedTab = 0);
+    }
   }
 
   Future<void> _openGoals() async {
@@ -288,7 +317,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           borderRadius: BorderRadius.circular(40),
           // Starting a workout is not wired up yet, so only the empty state
           // has an action for now.
-          onTap: hasProgram || _isLoadingProgram ? null : _openProgramSurvey,
+onTap: hasProgram ? _startWorkout : _openProgramSurvey,
           child: Container(
             width: double.infinity,
             alignment: Alignment.center,
@@ -332,6 +361,63 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _startWorkout() async {
+    try {
+      final workout = await ApiClient().startWorkout();
+      final lifts = (workout['lift_data'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (lift) => WorkoutExercise(
+              exerciseId: lift['exercise_id'] as String?,
+              name: lift['exercise'] as String? ?? 'Exercise',
+              sets: (lift['sets'] as num?)?.toInt() ?? 0,
+              reps: (lift['reps'] as num?)?.toInt() ?? 0,
+              recommendedWeight: 0,
+            ),
+          )
+          .toList();
+
+      if (!mounted) return;
+      if (lifts.isEmpty) {
+        throw const ApiException(502, 'The backend returned no exercises.');
+      }
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WorkoutSessionScreen(
+            workoutId: workout['workout_id'] as String?,
+            plan: WorkoutPlan(
+              title: workout['name'] as String? ?? 'Workout',
+              dayNumber: (_program?['next_day'] as num?)?.toInt() ?? 1,
+              totalDays: (_program?['number_of_days'] as num?)?.toInt() ?? 1,
+              nextWorkout: 'Keep building your consistency.',
+              exercises: lifts,
+            ),
+            weightUnit: 'lb',
+            onWorkoutSaved: (summary) {
+              final id = summary.workoutId;
+              if (id == null) return Future.value();
+              return ApiClient().submitWorkout(
+                workoutId: id,
+                notes: summary.notes,
+              );
+            },
+          ),
+        ),
+      );
+      await _loadProgram();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Widget _buildWorkoutActions() {

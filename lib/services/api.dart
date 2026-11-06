@@ -82,6 +82,19 @@ class ApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, _errorMessage(response));
     }
+
+  }
+
+  Future<void> updateFitnessGoals(Map<String, dynamic> fitnessProfile) async {
+    final response = await _request(
+      () => _client.put(
+        Uri.parse('$_baseUrl/users/update-goals'),
+        headers: _headers(),
+        body: jsonEncode(fitnessProfile),
+      ),
+      action: 'updating your fitness goals',
+    );
+    _ensureSuccess(response);
   }
 
   /// Sends the program survey answers and returns the top 3 matching programs.
@@ -155,6 +168,149 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> getNutritionSummary(DateTime day) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/nutrition/summary?day=${_dateString(day)}'),
+        headers: _headers(),
+      ),
+      action: 'loading nutrition',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<Map<String, dynamic>> createMeal({
+    required String mealName,
+    required String mealType,
+    required int calories,
+    required int protein,
+    required int carbs,
+    required int fat,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/nutrition/create-meal'),
+        headers: _headers(),
+        body: jsonEncode({
+          'meal_name': mealName,
+          'meal_type': mealType,
+          'calories': calories,
+          'protein': protein,
+          'carbs': carbs,
+          'fat': fat,
+        }),
+      ),
+      action: 'saving your meal',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<Map<String, dynamic>> saveNutritionGoals({
+    required int calories,
+    required int protein,
+    required int carbs,
+    required int fat,
+  }) async {
+    final response = await _request(
+      () => _client.put(
+        Uri.parse('$_baseUrl/nutrition/goal'),
+        headers: _headers(),
+        body: jsonEncode({
+          'calories_goal': calories,
+          'protein_goal': protein,
+          'carbs_goal': carbs,
+          'fat_goal': fat,
+        }),
+      ),
+      action: 'saving nutrition goals',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<Map<String, dynamic>> logSleep({
+    required DateTime wakeDate,
+    required String bedTime,
+    required String wakeTime,
+    required int quality,
+    required String notes,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/sleep/log'),
+        headers: _headers(),
+        body: jsonEncode({
+          'wake_date': _dateString(wakeDate),
+          'bed_time': bedTime,
+          'wake_time': wakeTime,
+          'quality': quality,
+          'notes': notes,
+        }),
+      ),
+      action: 'logging your sleep',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<Map<String, dynamic>> startWorkout() async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/lifting/start-workout'),
+        headers: _headers(),
+      ),
+      action: 'starting your workout',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<void> finishExercise({
+    required String workoutId,
+    required String exerciseId,
+    required int sets,
+    required int reps,
+    required double weight,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/lifting/$workoutId/finish-exercise'),
+        headers: _headers(),
+        body: jsonEncode({
+          'exercise_id': exerciseId,
+          'sets': sets,
+          'reps': reps,
+          'weight': weight,
+        }),
+      ),
+      action: 'saving your exercise',
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<Map<String, dynamic>> finishWorkout(String workoutId) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/lifting/$workoutId/finish-workout'),
+        headers: _headers(),
+      ),
+      action: 'finishing your workout',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<void> submitWorkout({
+    required String workoutId,
+    String? notes,
+  }) async {
+    final response = await _request(
+      () => _client.patch(
+        Uri.parse('$_baseUrl/lifting/$workoutId/submit-workout'),
+        headers: _headers(),
+        body: jsonEncode({'notes': notes}),
+      ),
+      action: 'saving your workout notes',
+    );
+    _ensureSuccess(response);
+  }
+
   Future<Map<String, dynamic>> getUserProfile() async {
     final response = await _request(
       () => _client.get(
@@ -225,5 +381,27 @@ class ApiClient {
     }
 
     return 'Unable to complete the request (HTTP ${response.statusCode}).';
+  }
+
+  Map<String, dynamic> _jsonMap(http.Response response) {
+    _ensureSuccess(response);
+    final body = jsonDecode(response.body);
+    if (body is! Map<String, dynamic>) {
+      throw const ApiException(502, 'The backend returned an invalid response.');
+    }
+    return body;
+  }
+
+  void _ensureSuccess(http.Response response) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, _errorMessage(response));
+    }
+  }
+
+  String _dateString(DateTime date) {
+    final local = date.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}';
   }
 }

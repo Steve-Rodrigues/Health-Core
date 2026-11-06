@@ -47,7 +47,7 @@ class FitnessProfileService {
     required double sleepGoalHours,
     required int workoutsPerWeek,
   }) {
-    return _apiClient.saveFitnessProfile({
+    return _apiClient.updateFitnessGoals({
       'current_weight': _toKilograms(weight, weightUnit),
       'height': heightCm,
       'goal_weight': _toKilograms(targetWeight, weightUnit),
