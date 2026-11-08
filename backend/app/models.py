@@ -112,6 +112,19 @@ class User_Program(Base):
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
 #*********** Nutrition Section *****************
 
+#stores the cache of each barcode we have seen from the api with the nutritional values attached to it 
+class Barcode_Cache(Base):
+    __tablename__ = 'barcode_cache'
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    barcode: Mapped[str | None] = mapped_column(String(), nullable=True,unique=True) #stores the barcode from the food scan
+    name: Mapped[str | None] = mapped_column(String(), nullable=True) #stores the food name
+    serving_size_grams:Mapped[float | None] = mapped_column(Float(), nullable=True) #holds the serving size in grams 
+    calories_per_100: Mapped[float | None] = mapped_column(Float(), nullable=True) #holds calories per 100 grams 
+    protein_per_100: Mapped[float | None] = mapped_column(Float(), nullable=True) #holds protein per 100 grams 
+    fat_per_100: Mapped[float | None] = mapped_column(Float(), nullable=True) #holds fat per 100 grams 
+    carbs_per_100: Mapped[float | None] = mapped_column(Float(), nullable=True) #holds carbs per 100 grams 
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 #Stores each meal a user logs 
 class Meal(Base):
     __tablename__ = 'meals'

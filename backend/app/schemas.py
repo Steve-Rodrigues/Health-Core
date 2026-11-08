@@ -170,7 +170,7 @@ class Program_Out(BaseModel):
     difficulty: str
     number_of_days: int
     goal: str
-    program_length: int | None
+    program_length: int | None = None
     equipment_level: str
     split: str
     score: float
@@ -186,7 +186,7 @@ class My_Program_Out(BaseModel):
     difficulty: str
     number_of_days: int
     goal: str
-    program_length: int | None
+    program_length: int | None = None
     equipment_level: str
     split: str
     current_day: int
@@ -200,7 +200,32 @@ class Program_In(BaseModel):
     difficulty: str
     number_of_days: int
     goal: str
-    program_length: int | None
+    program_length: int | None = None
     equipment_level: str
     split: str
     score: float   
+
+#format to take in the manually entered data for a given barcode food entry
+class Manually_Enter_Barcode_Food_In(BaseModel):
+    name: str
+    serving_size_grams: float = Field(ge=0)
+    calories: float = Field(ge=0)
+    fat: float = Field(ge=0)
+    carbs: float = Field(ge=0)
+    protein: float = Field(ge=0)
+#format to send the barcode food data to the frontend for the logging page
+class Logging_Barcode_Food_Out(BaseModel):
+    barcode: str
+    name: str
+    serving_size_grams: float #sends amount of grams in one serving size
+    calories_per_100: float #sends the amount of calories per 100 grams 
+    fat_per_100: float #sends the amount of fat per 100 grams 
+    carbs_per_100: float #sends the amount of carbs per 100 grams 
+    protein_per_100: float #sends the amount of protein per 100 grams 
+#format to take in the info for logging a user's barcoded meal-- only need the barcode and servings a user had along with the meal type to log as
+class Log_Meal_In(BaseModel):
+    servings_consumed: float = Field(gt=0) #number of servings they had
+    meal_type: str #could be breakfast/lunch/dinner/snack
+
+
+

@@ -8,7 +8,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
@@ -160,6 +160,28 @@ def nutrition_goal(body: Create_Nutrition_Goal_In, user_id: UUID = Depends(get_c
         db.commit()
     db.refresh(nutrition_goal)
     return nutrition_goal
+
+#****Barcode scanning section of nutrition ******
+
+#endpoint to get information regarding a scanned barcode-- check if in cache before going to the api
+@app.get('/nutrition/scan-food/{barcode}')
+def get_food_info_barcode(barcode:str, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    #check if barcode in cache, if not go to the api and send back all of the recieved info along with a missing list of what was not found
+    pass
+
+#endpoint to manually enter the info for the missing fields from the barcode info given-- either updating or creating a db entry depending if there was enough info to create one with the barcode 
+@app.put('/nutrition/manual-barcode/{barcode}',response_model=Logging_Barcode_Food_Out)
+def manually_enter_barcode_food(barcode:str,body: Manually_Enter_Barcode_Food_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    #checks if in the db, if not create entry and fill in all the values that were given to us from the user 
+    #save it in the cache and then we send back the obj with all needed info for the logging page
+    pass
+#endpoint to log the food for a users meal after they submit the servings they had for a given barcoded food
+@app.post('/nutrition/log-meal/{barcode}',status_code=status.HTTP_201_CREATED)
+def log_meal(barcode: str, body:Log_Meal_In, user_id:UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    #take in the barcode, servings consumed, and the type of meal to log a meal in the users meals table
+    #use the barcode to query the cache and then calculate the grams eaten using servings consumed and grams per serving size and then get the rest from there
+    #send back a 201 if created
+    pass
 
 #********************************* Health Section ****************************
 
