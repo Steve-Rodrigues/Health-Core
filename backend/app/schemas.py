@@ -59,20 +59,20 @@ class Nutrition_Summary_Out(BaseModel):
 class Create_Meal_In(BaseModel):
     meal_name: str
     meal_type: str
-    calories: int = 0
-    protein: int = 0
-    carbs: int = 0
-    fat: int = 0
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
 #format to send create meal data back to client
 class Create_Meal_Out(BaseModel):
     meal_date: date
     created_at: datetime
     meal_name: str
     meal_type: str
-    calories: int = 0
-    protein: int = 0
-    carbs: int = 0
-    fat: int = 0
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
     model_config = ConfigDict(from_attributes=True)
 #format to take in user nutrition goals
 class Create_Nutrition_Goal_In(BaseModel):
@@ -150,6 +150,7 @@ class Workout_Summary_Out(BaseModel):
     number_sets: int
     total_volume: float
     best_exercise: Best_Workout_Today | None = None
+    model_config = ConfigDict(from_attributes=True)
 
 #format for recieving the notes from the client when finish workout is pressed in summary
 class Finalize_Workout_In(BaseModel):
@@ -174,9 +175,12 @@ class Program_Out(BaseModel):
     equipment_level: str
     split: str
     score: float
+    model_config = ConfigDict(from_attributes=True)
+
 #format to send the 3 programs over to the client after we find the top 3 matches
 class Top_3_Programs_Out(BaseModel):
     programs:list[Program_Out]
+    model_config = ConfigDict(from_attributes=True)
 
 #format we send the users current program to the client-- next_day is the day start-workout will load next
 class My_Program_Out(BaseModel):
@@ -191,6 +195,7 @@ class My_Program_Out(BaseModel):
     split: str
     current_day: int
     next_day: int
+    model_config = ConfigDict(from_attributes=True)
 
 #format to take the chosen program in from the client after the user chooses one
 class Program_In(BaseModel):
@@ -204,11 +209,22 @@ class Program_In(BaseModel):
     equipment_level: str
     split: str
     score: float   
+#format to send the data from initial barcode get request
+class Scan_Barcode_Food_Out(BaseModel):
+    barcode: str
+    name: str | None = None
+    serving_size_grams: float|None = None #sends amount of grams in one serving size
+    calories_per_100: float|None = None #sends the amount of calories per 100 grams 
+    fat_per_100: float|None = None #sends the amount of fat per 100 grams 
+    carbs_per_100: float|None = None #sends the amount of carbs per 100 grams 
+    protein_per_100: float|None = None #sends the amount of protein per 100 grams 
+    missing: list[str] = [] #holds all the info that was not found yet- send to manual enter page
+    model_config = ConfigDict(from_attributes=True)
 
 #format to take in the manually entered data for a given barcode food entry
 class Manually_Enter_Barcode_Food_In(BaseModel):
     name: str
-    serving_size_grams: float = Field(ge=0)
+    serving_size_grams: float = Field(gt=0)
     calories: float = Field(ge=0)
     fat: float = Field(ge=0)
     carbs: float = Field(ge=0)
@@ -222,10 +238,10 @@ class Logging_Barcode_Food_Out(BaseModel):
     fat_per_100: float #sends the amount of fat per 100 grams 
     carbs_per_100: float #sends the amount of carbs per 100 grams 
     protein_per_100: float #sends the amount of protein per 100 grams 
+    model_config = ConfigDict(from_attributes=True)
+
 #format to take in the info for logging a user's barcoded meal-- only need the barcode and servings a user had along with the meal type to log as
 class Log_Meal_In(BaseModel):
     servings_consumed: float = Field(gt=0) #number of servings they had
     meal_type: str #could be breakfast/lunch/dinner/snack
-
-
 

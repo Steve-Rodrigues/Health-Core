@@ -1,5 +1,8 @@
 #stores the helper functions you need for your endpoints
-
+from fastapi import HTTPException,status
+import requests
+from sqlalchemy import select, func, exists
+from app.models import Workout, Workout_Set
 #buckets for the program scoring-- programs at or below the users bucket are ones they can do
 Experience_Buckets = {'beginner':0, 'intermediate':1, 'expert':2} #dict to grab only the programs that are at least at the level the user answered
 Equipment_Buckets = {'bodyweight':0, 'home':1,'gym':2} #each level includes the ones before it
@@ -47,3 +50,40 @@ def score_program(program, user_equip_level, user_exp_level, user_days_level, us
     return (
         goal_scale*WEIGHTS['goal']+experience_scale*WEIGHTS['experience']+equipment_scale*WEIGHTS['equipment']+days_scale*WEIGHTS['days']
     )
+
+#helper function to normalize the barcodes so if they are length 12 we add a 0 in front and only accept length of 8,13,14
+#8 is small packages, 13 is most barcodes, and 14 is multipack items
+def normalize_barcode(code):
+    stripped_code = ''.join(c for c in code if c.isdigit())#strips the spaces if any in the code
+    if len(stripped_code) == 12:
+        stripped_code = '0'+stripped_code #add 0 to the front so its the 13 length style
+    if len(stripped_code) not in (8,13,14): raise HTTPException(400, 'Code not a valid length')
+    return stripped_code
+#fetching from the barcode api for the info for a certain barcode
+def fetch_barcode(code):
+    try:
+        url = f'https://world.openfoodfacts.org/api/v2/product/{code}.json'
+        request = requests.get(url, 
+                               params={'fields':'code,product_name,serving_quantity,nutriments'},
+                               headers={'User-Agent':'HealthCore/1.0(stevie.rodrigues27@gmail.com)'},
+                               timeout=10)
+        if request.status_code == 404: raise HTTPException(404, 'Barcode not found')
+        data = request.json()
+    except requests.exceptions.RequestException:
+        raise HTTPException(503, 'Could not complete request')
+    if data.get('status') != 1: raise HTTPException(404, 'Barcode not found')
+    return data #this holds the object with the data from the request
+
+
+
+#cleans up a user's unfinished workouts that don't belong to the program they're on now (ex: they switched programs mid workout)
+#workouts with no sets logged are just abandoned starts so we delete them, ones with sets get marked finished so that data isnt lost
+#pass keep_program_id to leave open workouts for that program alone, or None to clean up all of them-- caller commits
+def close_stale_workouts(db, user_id, keep_program_id=None):
+    query = select(Workout).where(Workout.user_id==user_id, Workout.completed_at.is_(None))
+    if keep_program_id is not None:
+        query = query.where(Workout.program_id.is_distinct_from(keep_program_id)) #also catches workouts whose program was deleted (NULL)
+    for workout in db.scalars(query).all():
+        has_sets = db.scalar(select(exists().where(Workout_Set.workout_id==workout.id)))
+        if has_sets: workout.completed_at = func.now()
+        else: db.delete(workout)

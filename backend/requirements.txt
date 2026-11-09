@@ -8,6 +8,7 @@ asttokens==3.0.2
 asyncpg==0.31.0
 certifi==2026.7.22
 cffi==2.1.1
+charset-normalizer==3.5.2
 click==8.5.0
 colorama==0.4.6
 comm==0.2.3
@@ -66,6 +67,7 @@ python-dotenv==1.2.3
 python-multipart==0.0.32
 PyYAML==6.0.3
 pyzmq==27.2.0
+requests==2.34.2
 rich==15.0.0
 rich-toolkit==0.20.5
 rignore==0.8.1

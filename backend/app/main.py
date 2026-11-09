@@ -8,10 +8,10 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set
-from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache
+from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
 
 
 app = FastAPI()
@@ -163,25 +163,103 @@ def nutrition_goal(body: Create_Nutrition_Goal_In, user_id: UUID = Depends(get_c
 
 #****Barcode scanning section of nutrition ******
 
-#endpoint to get information regarding a scanned barcode-- check if in cache before going to the api
-@app.get('/nutrition/scan-food/{barcode}')
+#endpoint to get information regarding a scanned barcode
+#check if barcode in cache, if not go to the api and send back all of the recieved info along with a missing list of what was not found
+@app.get('/nutrition/scan-food/{barcode}', response_model=Scan_Barcode_Food_Out)
 def get_food_info_barcode(barcode:str, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    #check if barcode in cache, if not go to the api and send back all of the recieved info along with a missing list of what was not found
-    pass
+    barcode = normalize_barcode(barcode) #put barcode into our standard notation
+    cached_barcode = db.scalar(select(Barcode_Cache).where(Barcode_Cache.barcode==barcode))
+    processed_data = {'barcode':barcode,'name':None,'serving_size_grams':None,'calories_per_100':None,'fat_per_100':None,'carbs_per_100':None,'protein_per_100':None,'missing':[]}#object we send back to the client
+    #grab from the api and store in both the db along with the return object
+    if not cached_barcode:
+        data = fetch_barcode(barcode) #gets the barcode using the api request
+        product = data.get('product',{}) #everything we need is in the product nested dict
+        #using the loop through and add-- the keys are the api keys and the values are the db cols and the return data obj keys
+        api_db_matching = {'product_name':'name',
+                           'serving_quantity':'serving_size_grams',
+                           "carbohydrates_100g":'carbs_per_100',
+                           "energy-kcal_100g":'calories_per_100',
+                           "proteins_100g":'protein_per_100',
+                           "fat_100g":'fat_per_100'}
+        #go through and add to the return data object to then add to the db as well
+        for k,v in api_db_matching.items():
+            if '100' in k:
+                curr_macro = product.get('nutriments',{}).get(k,-1) #macros are inside the nutriments dict
+                if curr_macro != -1: processed_data[v] = curr_macro
+            else:
+                curr_api_val = product.get(k,-1) #if it's -1 it means its missing so we'll leave as None
+                if curr_api_val != -1: 
+                    processed_data[v] = curr_api_val
+        #now add to the db what we have so far
+        try:
+            serving_size = processed_data['serving_size_grams']
+            try:
+                processed_data['serving_size_grams'] = float(serving_size) if serving_size is not None else None
+            except (TypeError,ValueError):
+                processed_data['serving_size_grams'] = None #cant convert it
+            if processed_data['serving_size_grams'] is not None and processed_data['serving_size_grams'] <= 0:
+                processed_data['serving_size_grams'] = None #a 0 or negative serving size would make every logged meal 0 so treat it as missing
+            name = processed_data['name']
+            processed_data['name'] = name.strip() if isinstance(name, str) and name.strip() else None #blank names count as missing
+            enter_barcode = Barcode_Cache(barcode=barcode,name=processed_data['name'],serving_size_grams=processed_data['serving_size_grams'],calories_per_100=processed_data['calories_per_100'],protein_per_100=processed_data['protein_per_100'],fat_per_100=processed_data['fat_per_100'],carbs_per_100=processed_data['carbs_per_100'])
+            db.add(enter_barcode)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+    else:
+        #go through all the keys in our obj and grab from db if its in there
+        #any values that are None in the end are put into missing
+        for key in processed_data.keys():
+            if key in ('barcode','missing'): continue #dont need these
+            if getattr(cached_barcode,key,None) is not None:
+                processed_data[key] = getattr(cached_barcode,key) #stores the value in the cache 
+    for k,v in processed_data.items():
+        if v is None: processed_data['missing'].append(k) #add to missing if still none
+    return processed_data
 
 #endpoint to manually enter the info for the missing fields from the barcode info given-- either updating or creating a db entry depending if there was enough info to create one with the barcode 
+#send back the barcode, serving size, name, and 4 macros per 100 grams so they can fill in the logging screen
 @app.put('/nutrition/manual-barcode/{barcode}',response_model=Logging_Barcode_Food_Out)
 def manually_enter_barcode_food(barcode:str,body: Manually_Enter_Barcode_Food_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    #checks if in the db, if not create entry and fill in all the values that were given to us from the user 
-    #save it in the cache and then we send back the obj with all needed info for the logging page
-    pass
+    barcode = normalize_barcode(barcode)
+    food = db.scalar(select(Barcode_Cache).where(Barcode_Cache.barcode==barcode))
+    if food is None:
+        food = Barcode_Cache(barcode=barcode)
+        db.add(food)
+    food.name,food.serving_size_grams,food.calories_per_100,food.protein_per_100,food.fat_per_100,food.carbs_per_100 = body.name,body.serving_size_grams,body.calories,body.protein,body.fat,body.carbs
+    try:
+        db.commit()
+        db.refresh(food)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(500, 'Could not save the food')
+    return food
+    
 #endpoint to log the food for a users meal after they submit the servings they had for a given barcoded food
-@app.post('/nutrition/log-meal/{barcode}',status_code=status.HTTP_201_CREATED)
+#we take the barcode, servings consumed, meal type and then calculate the rest using that
+@app.post('/nutrition/log-meal/{barcode}',status_code=status.HTTP_201_CREATED, response_model=Create_Meal_Out)
 def log_meal(barcode: str, body:Log_Meal_In, user_id:UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
-    #take in the barcode, servings consumed, and the type of meal to log a meal in the users meals table
-    #use the barcode to query the cache and then calculate the grams eaten using servings consumed and grams per serving size and then get the rest from there
-    #send back a 201 if created
-    pass
+    barcode = normalize_barcode(barcode) #just in case
+    cached_food = db.scalar(select(Barcode_Cache).where(Barcode_Cache.barcode==barcode))
+    if cached_food is None: raise HTTPException(404,'Food not in cache yet, redirecting to manual entry')
+    #make sure all the macros are there for math safety
+    needed_macros = [cached_food.fat_per_100,cached_food.protein_per_100,cached_food.carbs_per_100,cached_food.calories_per_100,cached_food.serving_size_grams,cached_food.name]
+    if any(m is None for m in needed_macros): raise HTTPException(422,'Food is missing needed macro values')
+    total_grams_consumed = cached_food.serving_size_grams * body.servings_consumed #givs the number of grams we had 
+    calories = round((total_grams_consumed*cached_food.calories_per_100)/100,1)
+    carbs = round((total_grams_consumed*cached_food.carbs_per_100)/100,1)
+    protein = round((total_grams_consumed*cached_food.protein_per_100)/100,1)
+    fat = round((total_grams_consumed*cached_food.fat_per_100)/100,1)
+    meal = Meal(user_id=user_id,meal_name=cached_food.name,meal_type=body.meal_type,protein=protein,carbs=carbs,fat=fat,calories=calories)
+    try:
+        db.add(meal)
+        db.commit()
+        db.refresh(meal)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(500, 'Could not save meal')
+    return meal
+
 
 #********************************* Health Section ****************************
 
@@ -214,10 +292,14 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
     if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
     program = db.scalar(select(Program).where(Program.id==user_program.program_id))
     if program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
-    #check if there is an active workout before creating another-- tests for double clicks
-    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.completed_at.is_(None)))
-    if workout is None: 
+    close_stale_workouts(db, user_id, keep_program_id=program.id) #clear out open workouts left over from a program they switched off of
+    #check if there is an active workout for this program before creating another-- tests for double clicks
+    workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.program_id==program.id, Workout.completed_at.is_(None)))
+    is_new_workout = workout is None
+    if is_new_workout:
         workout = Workout(user_id=user_id, program_id=program.id)
+    #move to the next day for a new workout, or if the day is still 0 (no real day yet, e.g. right after choosing a program)
+    if is_new_workout or user_program.current_day < 1:
         if user_program.current_day >= program.number_of_days: user_program.current_day = 1
         else: user_program.current_day += 1
 
@@ -265,7 +347,7 @@ def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user)
     if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Workout does not exist')
     if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Workout is not active')
 
-    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id, User_Program.program_id==current_workout.program_id))
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id)) #by user only so a workout started before switching programs can still be finished
     if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program for this workout not found')
 
     current_workout.completed_at = func.now() #gets the postgres version of the date, consistent to how we do the start time
@@ -346,6 +428,7 @@ def choose_program(program_id:UUID, user_id: UUID = Depends(get_curr_user), db: 
     program = db.scalar(select(Program).where(Program.id == program_id))
     if not program: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Program not found')
     user_program = User_Program(goal=program.goal,program_id=program_id,user_id=user_id,experience_level=program.difficulty,days_available=program.number_of_days)
+    close_stale_workouts(db, user_id) #new program starts fresh so clean up any unfinished workouts from before
     try:
         db.add(user_program)
         db.commit()
