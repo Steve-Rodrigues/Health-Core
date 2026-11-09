@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
+import 'barcode_flow_screens.dart';
 
 class NutritionScreen extends StatefulWidget {
   const NutritionScreen({super.key});
@@ -59,6 +60,19 @@ class _NutritionScreenState extends State<NutritionScreen> {
       if (mounted) _message(error.message);
     }
 
+  }
+
+  Future<void> _scanBarcode() async {
+    final logged = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (logged == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Meal logged')),
+      );
+      await _load();
+    }
   }
 
   Future<void> _editGoals() async {
@@ -131,8 +145,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
                             ListTile(
                               title: Text(macro[0].toUpperCase() + macro.substring(1)),
                               trailing: Text(
-                                '${consumed[macro] ?? 0}'
-                                '${goals == null ? '' : ' / ${goals[macro] ?? 0}'}',
+                                formatAmount(consumed[macro] as num? ?? 0) +
+                                    (goals == null ? '' : ' / ${goals[macro] ?? 0}'),
                               ),
                             ),
                         ],
@@ -144,6 +158,12 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     onPressed: _addMeal,
                     icon: const Icon(Icons.add),
                     label: const Text('Log a meal'),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: _scanBarcode,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Scan a barcode'),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(

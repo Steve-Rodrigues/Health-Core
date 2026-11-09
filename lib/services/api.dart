@@ -205,6 +205,70 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Looks up a scanned barcode. Returns null when the product isn't in
+  /// Open Food Facts (404) so the caller can send the user to manual entry.
+  /// The returned map has a `missing` list of fields the user still needs to fill in.
+  Future<Map<String, dynamic>?> scanBarcode(String barcode) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/nutrition/scan-food/${Uri.encodeComponent(barcode)}'),
+        headers: _headers(),
+      ),
+      action: 'looking up that barcode',
+    );
+    if (response.statusCode == 404) return null;
+    return _jsonMap(response);
+  }
+
+  /// Saves food info the user typed in for a barcode. All values are per 100 g.
+  /// Returns the full food (name, serving size, macros per 100 g).
+  Future<Map<String, dynamic>> saveManualBarcodeFood({
+    required String barcode,
+    required String name,
+    required double servingSizeGrams,
+    required double caloriesPer100,
+    required double proteinPer100,
+    required double carbsPer100,
+    required double fatPer100,
+  }) async {
+    final response = await _request(
+      () => _client.put(
+        Uri.parse('$_baseUrl/nutrition/manual-barcode/${Uri.encodeComponent(barcode)}'),
+        headers: _headers(),
+        body: jsonEncode({
+          'name': name,
+          'serving_size_grams': servingSizeGrams,
+          'calories': caloriesPer100,
+          'protein': proteinPer100,
+          'carbs': carbsPer100,
+          'fat': fatPer100,
+        }),
+      ),
+      action: 'saving that food',
+    );
+    return _jsonMap(response);
+  }
+
+  /// Logs a meal from a barcoded food. The backend works out the macros.
+  Future<Map<String, dynamic>> logBarcodeMeal({
+    required String barcode,
+    required double servings,
+    required String mealType,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/nutrition/log-meal/${Uri.encodeComponent(barcode)}'),
+        headers: _headers(),
+        body: jsonEncode({
+          'servings_consumed': servings,
+          'meal_type': mealType,
+        }),
+      ),
+      action: 'logging your meal',
+    );
+    return _jsonMap(response);
+  }
+
   Future<Map<String, dynamic>> saveNutritionGoals({
     required int calories,
     required int protein,
