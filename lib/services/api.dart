@@ -168,6 +168,21 @@ class ApiClient {
     }
   }
 
+  /// Returns this week's completed workouts and the program's weekly total.
+  /// [weekStart] should be local midnight on Sunday; it is sent as UTC so the
+  /// backend knows the exact moment the user's week begins.
+  Future<Map<String, dynamic>> getWeeklyWorkouts(DateTime weekStart) async {
+    final startDay = Uri.encodeQueryComponent(weekStart.toUtc().toIso8601String());
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/lifting/current-workouts?start_day=$startDay'),
+        headers: _headers(),
+      ),
+      action: 'loading this week\'s workouts',
+    );
+    return _jsonMap(response);
+  }
+
   Future<Map<String, dynamic>> getNutritionSummary(DateTime day) async {
     final response = await _request(
       () => _client.get(

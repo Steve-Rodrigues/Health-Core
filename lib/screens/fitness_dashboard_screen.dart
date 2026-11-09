@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -43,17 +45,12 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   Map<String, dynamic>? _program;
   bool _isLoadingProgram = true;
 
-  static const _consistencyData = [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-  ];
+  // This week's progress from /lifting/current-workouts.
+  bool _isLoadingWeek = true;
+  int _weekCompleted = 0;
+  int _weekTotal = 0;
+  Set<int> _completedDays = {}; // 0 = Sunday ... 6 = Saturday
+
   static const _personalBests = ['—', '—', '—', '—'];
 
   void _selectTab(int index) {
@@ -97,6 +94,40 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   void initState() {
     super.initState();
     _loadProgram();
+    _loadWeek();
+  }
+
+  /// Local midnight on the most recent Sunday (today if today is Sunday).
+  DateTime _startOfWeek() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day - now.weekday % 7);
+  }
+
+  Future<void> _loadWeek() async {
+    setState(() => _isLoadingWeek = true);
+    var completed = 0;
+    var total = 0;
+    final days = <int>{};
+    try {
+      final week = await ApiClient().getWeeklyWorkouts(_startOfWeek());
+      completed = (week['completed_lifts'] as num?)?.toInt() ?? 0;
+      total = (week['total_lifts'] as num?)?.toInt() ?? 0;
+      for (final lift in (week['completed_lift_array'] as List? ?? [])) {
+        final raw = lift is Map ? lift['day_completed'] : null;
+        final parsed = raw is String ? DateTime.tryParse(raw) : null;
+        // Backend sends UTC; convert so the dot lands on the user's local day.
+        if (parsed != null) days.add(parsed.toLocal().weekday % 7);
+      }
+    } on ApiException {
+      // Show an empty week if the backend is unreachable.
+    }
+    if (!mounted) return;
+    setState(() {
+      _weekCompleted = completed;
+      _weekTotal = total;
+      _completedDays = days;
+      _isLoadingWeek = false;
+    });
   }
 
   Future<void> _loadProgram() async {
@@ -120,8 +151,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       context,
       MaterialPageRoute(builder: (_) => const ProgramSurveyScreen()),
     );
-    // Picking a program in the survey changes what this card should show.
-    await _loadProgram();
+    // Picking a program in the survey changes what these cards should show.
+    await Future.wait([_loadProgram(), _loadWeek()]);
   }
 
   @override
@@ -385,7 +416,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           ),
         ),
       );
-      await _loadProgram();
+      await Future.wait([_loadProgram(), _loadWeek()]);
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -436,27 +467,110 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
           decoration: BoxDecoration(
-            color: lightBlue,
+            color: paleBlue,
             borderRadius: BorderRadius.circular(28),
           ),
-          child: Container(
-            height: 104,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: paleBlue,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: CustomPaint(
-              painter: ConsistencyChartPainter(
-                values: _consistencyData,
-                lineColor: Colors.black,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'This week',
+                    style: TextStyle(
+                      color: navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!_isLoadingWeek)
+                    Text(
+                      _weekTotal > 0
+                          ? '$_weekCompleted of $_weekTotal done'
+                          : 'No program yet',
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 13,
+                      ),
+                    ),
+                ],
               ),
-              child: const SizedBox.expand(),
-            ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(7, _buildWeekDay),
+              ),
+            ],
           ),
         ),
+      ],
+    );
+  }
+
+  static const _dayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  static const Color _doneGreen = Color(0xFF16A34A);
+  static const Color _emptyGrey = Color(0xFFE3E8EC);
+
+  /// One day in the strip: green = lifted, dark ring = today,
+  /// dashed = still ahead this week, grey = past day with no lift.
+  Widget _buildWeekDay(int index) {
+    final todayIndex = DateTime.now().weekday % 7;
+    final done = _completedDays.contains(index);
+    final isToday = index == todayIndex;
+    final isFuture = index > todayIndex;
+    const size = 30.0;
+
+    Widget dot;
+    if (done) {
+      dot = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _doneGreen,
+          border: isToday ? Border.all(color: navy, width: 2.5) : null,
+        ),
+      );
+    } else if (isToday) {
+      dot = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: white,
+          border: Border.all(color: navy, width: 2.5),
+        ),
+      );
+    } else if (isFuture) {
+      dot = CustomPaint(
+        size: const Size(size, size),
+        painter: DashedCirclePainter(color: Colors.black38),
+      );
+    } else {
+      dot = Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: _emptyGrey,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Text(
+          _dayLetters[index],
+          style: TextStyle(
+            color: isToday ? navy : Colors.black54,
+            fontSize: 12,
+            fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        dot,
       ],
     );
   }
@@ -601,45 +715,35 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   }
 }
 
-class ConsistencyChartPainter extends CustomPainter {
-  ConsistencyChartPainter({required this.values, required this.lineColor});
+/// Draws a dashed circle outline for days that haven't happened yet.
+class DashedCirclePainter extends CustomPainter {
+  DashedCirclePainter({required this.color});
 
-  final List<double> values;
-  final Color lineColor;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (values.length < 2 || size.isEmpty) return;
-
+    const strokeWidth = 1.5;
+    const dashCount = 12;
+    const sweep = 2 * math.pi / dashCount;
     final paint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2.5
+      ..color = color
+      ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final minValue = values.reduce((a, b) => a < b ? a : b);
-    final maxValue = values.reduce((a, b) => a > b ? a : b);
-    final range = maxValue - minValue;
-    final path = Path();
-
-    for (int i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1);
-      final normalized = range == 0 ? 0.5 : (values[i] - minValue) / range;
-      final y = size.height * (0.9 - normalized * 0.8);
-
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      ..strokeCap = StrokeCap.round;
+    final rect = Rect.fromLTWH(
+      strokeWidth / 2,
+      strokeWidth / 2,
+      size.width - strokeWidth,
+      size.height - strokeWidth,
+    );
+    for (var i = 0; i < dashCount; i++) {
+      canvas.drawArc(rect, i * sweep, sweep * 0.55, false, paint);
     }
-
-    canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant ConsistencyChartPainter oldDelegate) {
-    return oldDelegate.values != values || oldDelegate.lineColor != lineColor;
+  bool shouldRepaint(covariant DashedCirclePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
