@@ -1,6 +1,7 @@
 #Holds all of the pydantic schemas which are going to validate JSON data coming in and out of the backend
 from datetime import datetime, date, time
 from uuid import UUID
+import uuid
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal #values in the Literal array must be only what we set
 #on signup the backend is only expecting the client to send over the username because we get the id from the dependency
@@ -245,3 +246,13 @@ class Log_Meal_In(BaseModel):
     servings_consumed: float = Field(gt=0) #number of servings they had
     meal_type: str #could be breakfast/lunch/dinner/snack
 
+#format the lifts array will be in-- it has the workout id and the datetime it was completed at
+class Lift_Array(BaseModel):
+    workout_id: UUID
+    day_completed: datetime
+
+#format to send the weekly workouts completed out of total to the flutter client side
+class Send_Weekly_Lifts_Out(BaseModel):
+    completed_lifts: int #number of workouts finished
+    total_lifts: int #number of lifts for that week in total
+    completed_lift_array: list[Lift_Array]#

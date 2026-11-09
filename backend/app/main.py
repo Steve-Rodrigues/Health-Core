@@ -8,7 +8,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -283,6 +283,31 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
     return sleep_log
 
 #*********************************** Lifting Section ***************************************
+
+#displaying workouts completed this week along with the days they were completed and the total workouts to do for a visual of workouts this week
+@app.get('/lifting/current-workouts', response_model=Send_Weekly_Lifts_Out)
+def get_this_weeks_workouts(start_day: datetime, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    if start_day.tzinfo is None: raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='start_day must include a timezone')
+    end_day = start_day + timedelta(days=7) #doesnt include this day-- this is 7 days out from the weeks start (next sunday)
+    week_summary = {
+        'completed_lifts':0,
+        'total_lifts':0,
+        'completed_lift_array':[]
+    } #this is the object that will be sent back to give the summary of what was done so far
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id)) #gets the program associated with the user
+    if user_program is None: return week_summary #not enrolled in a program so everything is 0
+    completed_lifts = db.scalars(select(Workout).where(Workout.user_id==user_id,Workout.program_id==user_program.program_id,Workout.completed_at.is_not(None),start_day<=Workout.completed_at,Workout.completed_at<end_day).order_by(Workout.completed_at)).all()#grabs each completed workout that is either after or on Sunday(start of week) and at most the next Saturday(before next sunday)
+    #now lets fill the summary with the results of the users workouts 
+    week_summary['completed_lifts'] = len(completed_lifts) #only grabbed completed workouts, so the length of the list is the number of completed workouts
+    #getting the number of lifts in their program by going through User_Program and then accessing the Program table
+    week_summary['total_lifts'] = user_program.program.number_of_days
+    #filling in the completed lifts now with their id and the day of the week it was done 
+    for lift in completed_lifts:
+        week_summary['completed_lift_array'].append({
+            'workout_id':lift.id,
+            'day_completed': lift.completed_at
+        })
+    return week_summary
 
 #start-workout endpoint
 @app.post('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_201_CREATED)
