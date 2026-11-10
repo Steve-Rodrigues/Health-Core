@@ -50,7 +50,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   bool _isLoadingWeek = true;
   int _weekCompleted = 0;
   int _weekTotal = 0;
-  Set<int> _completedDays = {}; // 0 = Sunday ... 6 = Saturday
+  // Day of week (0 = Sunday ... 6 = Saturday) -> id of the workout done that day.
+  Map<int, String> _completedDays = {};
 
   // Newest personal records from /lifting/newest-records.
   bool _isLoadingRecords = true;
@@ -126,16 +127,20 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     setState(() => _isLoadingWeek = true);
     var completed = 0;
     var total = 0;
-    final days = <int>{};
+    final days = <int, String>{};
     try {
       final week = await ApiClient().getWeeklyWorkouts(_startOfWeek());
       completed = (week['completed_lifts'] as num?)?.toInt() ?? 0;
       total = (week['total_lifts'] as num?)?.toInt() ?? 0;
       for (final lift in (week['completed_lift_array'] as List? ?? [])) {
-        final raw = lift is Map ? lift['day_completed'] : null;
+        if (lift is! Map) continue;
+        final raw = lift['day_completed'];
+        final id = lift['workout_id'];
         final parsed = raw is String ? DateTime.tryParse(raw) : null;
         // Backend sends UTC; convert so the dot lands on the user's local day.
-        if (parsed != null) days.add(parsed.toLocal().weekday % 7);
+        if (parsed != null && id is String) {
+          days[parsed.toLocal().weekday % 7] = id;
+        }
       }
     } on ApiException {
       // Show an empty week if the backend is unreachable.
@@ -556,7 +561,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   /// dashed = still ahead this week, grey = past day with no lift.
   Widget _buildWeekDay(int index) {
     final todayIndex = DateTime.now().weekday % 7;
-    final done = _completedDays.contains(index);
+    final workoutId = _completedDays[index];
+    final done = workoutId != null;
     final isToday = index == todayIndex;
     final isFuture = index > todayIndex;
     const size = 30.0;
@@ -598,7 +604,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       );
     }
 
-    return Column(
+    final column = Column(
       children: [
         Text(
           _dayLetters[index],
@@ -610,6 +616,150 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         ),
         const SizedBox(height: 6),
         dot,
+      ],
+    );
+
+    // Only days with a finished workout can be tapped to see its summary.
+    if (!done) return column;
+    return InkWell(
+      onTap: () => _showWorkoutSummary(workoutId),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: column,
+      ),
+    );
+  }
+
+  /// Opens a bottom sheet with the summary of a workout done this week.
+  void _showWorkoutSummary(String workoutId) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: paleBlue,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => FutureBuilder<Map<String, dynamic>>(
+        future: ApiClient().getWorkout(workoutId),
+        builder: (context, snapshot) {
+          Widget body;
+          if (snapshot.connectionState != ConnectionState.done) {
+            body = const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator(color: navy)),
+            );
+          } else if (snapshot.hasError || snapshot.data == null) {
+            final error = snapshot.error;
+            body = Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text(
+                error is ApiException ? error.message : 'Could not load that workout.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54, fontSize: 14),
+              ),
+            );
+          } else {
+            body = _buildWorkoutSummary(snapshot.data!);
+          }
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+              child: body,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWorkoutSummary(Map<String, dynamic> workout) {
+    final name = workout['workout_name'] as String? ?? 'Workout';
+    final day = (workout['workout_day'] as num?)?.toInt();
+    final totalDays = (workout['total_days'] as num?)?.toInt();
+    final duration = (workout['duration'] as num?)?.toDouble() ?? 0;
+    final best = workout['best_exercise'] as Map<String, dynamic>?;
+
+    Widget stat(String label, String value) {
+      return Expanded(
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: navy,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name,
+          style: const TextStyle(
+            fontFamily: 'Georgia',
+            color: navy,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (day != null && totalDays != null)
+          Text(
+            'Day $day of $totalDays · ${_formatMinutes(duration).replaceFirst('~', '')}',
+            style: const TextStyle(color: Colors.black54, fontSize: 14),
+          ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            stat('Exercises', '${(workout['number_exercises'] as num?)?.toInt() ?? 0}'),
+            stat('Sets', '${(workout['number_sets'] as num?)?.toInt() ?? 0}'),
+            stat('Volume', '${_formatWeight(workout['total_volume'])} lb'),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: lightBlue,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: best == null
+              ? const Text(
+                  'No exercises were logged in this workout.',
+                  style: TextStyle(color: Colors.black54, fontSize: 14),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('BEST LIFT', style: _prHeaderStyle),
+                    const SizedBox(height: 6),
+                    Text(
+                      best['exercise_name'] as String? ?? 'Exercise',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${(best['sets'] as num?)?.toInt() ?? 0} × '
+                      '${(best['reps'] as num?)?.toInt() ?? 0} @ '
+                      '${_formatWeight(best['weight'])} lb',
+                      style: const TextStyle(color: Colors.black87, fontSize: 15),
+                    ),
+                  ],
+                ),
+        ),
       ],
     );
   }

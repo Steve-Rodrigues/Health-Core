@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -529,3 +529,40 @@ def get_newest_records(user_id: UUID = Depends(get_curr_user), db: Session= Depe
     for pr in top_3_records:
         newest_records['records'].append({'lift_name':pr.name,'weight':pr.weight,'reps':pr.reps})
     return newest_records
+
+#endpoint to get a workout completed in the past week from the lifting dashboard
+@app.get('/lifting/get-workout/{workout_id}', response_model=Week_Workout_Out)
+def get_workout_from_current_week(workout_id:UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    summary = {
+        'workout_name': None,
+        'workout_day': None,
+        'total_days': None,
+        'duration': None,
+        'number_exercises': None,
+        'number_sets': None,
+        'total_volume': None,
+        'best_exercise': None
+    } #going to hold the return data for the workout
+    #get the workout info first
+    workout = db.execute(select(Program.name,Workout.day, Program.number_of_days, Workout.started_at, Workout.completed_at)
+                         .outerjoin(Program, Workout.program_id == Program.id)
+                         .where(Workout.id==workout_id, Workout.completed_at.is_not(None), Workout.user_id==user_id)).first()
+    if workout is None: raise HTTPException(404,'Can not access workout') #either not a workout or not completed
+    #now lets get the exercise info-- returns a row per exercise logged during a workout
+    exercises = db.execute(select(Exercise.id,Exercise.name,Workout_Set.sets,Workout_Set.weight,Workout_Set.reps)
+                           .join(Exercise, Exercise.id == Workout_Set.exercise_id)
+                           .where(Workout_Set.workout_id==workout_id)).all()
+    summary['workout_name'] = workout.name
+    summary['workout_day'] = workout.day
+    summary['total_days'] = workout.number_of_days
+    summary['duration'] = round((workout.completed_at - workout.started_at).total_seconds() / 60, 1) #minutes, same as the other endpoints
+    summary['number_exercises'] = len(exercises)
+    summary['number_sets'] = sum(e.sets for e in exercises)
+    summary['total_volume'] = sum(e.weight*e.reps*e.sets for e in exercises)
+    if exercises: #max() crashes on an empty list, so only pick a best exercise if something was logged
+        best = max(exercises, key=lambda e: e.weight*(1+e.reps/30)) #highest estimated 1RM (Epley)
+        summary['best_exercise'] = {'exercise_name': best.name, 'sets': best.sets, 'reps': best.reps, 'weight': best.weight}
+    return summary
+
+    
+

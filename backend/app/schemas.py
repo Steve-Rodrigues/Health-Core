@@ -267,3 +267,15 @@ class Newest_Prs_Array(BaseModel):
 #format to get the top 3 newest PR's 
 class Newest_PRs(BaseModel):
     records: list[Newest_Prs_Array]
+
+#format to send a workout from the current week 
+class Week_Workout_Out(BaseModel):
+    workout_name: str | None = None #from program name-- None if the program was deleted (program_id SET NULL)
+    workout_day: int | None = None #from Workout-- nullable column, older workouts may not have it
+    total_days: int | None = None #from Program-- None if the program was deleted
+    duration: float #Workout
+    number_exercises: int #Program Exercise
+    number_sets: int #Workout Set
+    total_volume: float #Workout Set
+    best_exercise: Best_Workout_Today | None = None #Workout Set
+    model_config = ConfigDict(from_attributes=True)

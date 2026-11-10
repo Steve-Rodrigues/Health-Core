@@ -197,6 +197,20 @@ class ApiClient {
     return (body['records'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
   }
 
+  /// Returns the summary of one completed workout: `workout_name`,
+  /// `workout_day`, `total_days`, `duration` (minutes), `number_exercises`,
+  /// `number_sets`, `total_volume` and `best_exercise` (may be null).
+  Future<Map<String, dynamic>> getWorkout(String workoutId) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/lifting/get-workout/${Uri.encodeComponent(workoutId)}'),
+        headers: _headers(),
+      ),
+      action: 'loading that workout',
+    );
+    return _jsonMap(response);
+  }
+
   Future<Map<String, dynamic>> getNutritionSummary(DateTime day) async {
     final response = await _request(
       () => _client.get(
