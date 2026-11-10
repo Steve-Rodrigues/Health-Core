@@ -351,8 +351,27 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(color: lightBlue, fontSize: 14),
         ),
+        //only shows once the user has finished this day at least once
+        if (program['estimated_completion_time'] != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Est. time: ${_formatMinutes((program['estimated_completion_time'] as num).toDouble())}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: lightBlue, fontSize: 13),
+          ),
+        ],
       ],
     );
+  }
+
+  //turns minutes into "~45 min" or "~1 hr 10 min"
+  String _formatMinutes(double minutes) {
+    final total = minutes.round().clamp(1, 1 << 30);
+    final hours = total ~/ 60;
+    final mins = total % 60;
+    if (hours == 0) return '~$mins min';
+    if (mins == 0) return '~$hours hr';
+    return '~$hours hr $mins min';
   }
 
   Widget _buildStartWorkoutButton() {
