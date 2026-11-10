@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, func
+from sqlalchemy import Date, cast, select, func
 from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
@@ -318,6 +318,10 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
     program = db.scalar(select(Program).where(Program.id==user_program.program_id))
     if program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
     close_stale_workouts(db, user_id, keep_program_id=program.id) #clear out open workouts left over from a program they switched off of
+    #check if there was already a workout completed today-- if so then dont allow to continue because only allow 1 workout per day
+    today_date = func.current_date() #this is to check if the workout is the same date as today
+    same_day_lift = db.scalar(select(Workout).where(Workout.user_id==user_id,cast(Workout.completed_at,Date())==today_date))
+    if same_day_lift is not None: raise HTTPException(409, 'Can not complete 2 workouts in 1 day')
     #check if there is an active workout for this program before creating another-- tests for double clicks
     workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.program_id==program.id, Workout.completed_at.is_(None)))
     is_new_workout = workout is None
@@ -327,7 +331,6 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
     if is_new_workout or user_program.current_day < 1:
         if user_program.current_day >= program.number_of_days: user_program.current_day = 1
         else: user_program.current_day += 1
-
     result_obj['name'], result_obj['description'], result_obj['goal'],result_obj['lift_data'] = program.name, program.description, program.goal,[]
 
     try:
