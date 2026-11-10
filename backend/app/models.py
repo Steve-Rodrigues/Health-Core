@@ -30,6 +30,16 @@ class User(Base):
 
 #********* Lifting Section Tables ****************
 
+#holds the user's personal records for their lifts(highest estimated 1 rep max using the Epley formula)
+class Personal_Record(Base):
+    __tablename__ = 'personal_records'
+    __table_args__ = (UniqueConstraint('user_id','exercise_id'),)#makes sure each user's exercise is unique because must be their best one
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    exercise_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('exercises.id', ondelete='RESTRICT')) 
+    weight: Mapped[float] = mapped_column(Float(), nullable=False, default=0)
+    reps: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    achieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now()) #holds the date/time it was achieved at for ordering of newest to oldest
 #tracks each workout a user completes
 class Workout(Base):
     __tablename__ = "workouts"

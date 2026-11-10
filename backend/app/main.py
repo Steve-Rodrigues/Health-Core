@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
 
 
@@ -356,12 +356,23 @@ def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Dep
     if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Could not find workout with that ID')
     if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='There is not an active workout to record in')
     workout_set = Workout_Set(workout_id=workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
+    db.add(workout_set) #always save the set, PR or not
+    #check if it is PR by comparing estimated 1 rep maxes using the Epley formula: weight * (1 + reps/30)
+    current_pr = db.scalar(select(Personal_Record).where(Personal_Record.exercise_id==workout_set.exercise_id, Personal_Record.user_id==user_id))
+    if current_pr is None: #first time doing this exercise so it is automatically the PR
+        db.add(Personal_Record(user_id=user_id, exercise_id=workout_set.exercise_id, weight=workout_set.weight, reps=workout_set.reps))
+    else:
+        current_max = current_pr.weight * (1 + current_pr.reps/30)
+        #new max so overwrite the old one in place
+        if current_max < (workout_set.weight * (1 + workout_set.reps/30)):
+            current_pr.weight = workout_set.weight
+            current_pr.reps = workout_set.reps
+            current_pr.achieved_at = func.now()
     try:
-        db.add(workout_set)
-        db.commit()
+        db.commit() #set and PR saved together so neither is saved without the other
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not create set')
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Could not save set')
     db.refresh(workout_set)
     return workout_set
 
