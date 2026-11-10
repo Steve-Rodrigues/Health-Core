@@ -31,14 +31,15 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     fontSize: 14,
     fontWeight: FontWeight.w500,
   );
-  static const TextStyle _personalBestLabelStyle = TextStyle(
+  static const TextStyle _prHeaderStyle = TextStyle(
     color: navy,
     fontSize: 12,
     fontWeight: FontWeight.bold,
+    letterSpacing: 0.4,
   );
-  static const TextStyle _personalBestValueStyle = TextStyle(
+  static const TextStyle _prCellStyle = TextStyle(
     color: Colors.black,
-    fontSize: 20,
+    fontSize: 16,
   );
 
   int _selectedTab = 0;
@@ -51,7 +52,9 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   int _weekTotal = 0;
   Set<int> _completedDays = {}; // 0 = Sunday ... 6 = Saturday
 
-  static const _personalBests = ['—', '—', '—', '—'];
+  // Newest personal records from /lifting/newest-records.
+  bool _isLoadingRecords = true;
+  List<Map<String, dynamic>> _records = [];
 
   void _selectTab(int index) {
     setState(() => _selectedTab = index);
@@ -95,6 +98,22 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     super.initState();
     _loadProgram();
     _loadWeek();
+    _loadRecords();
+  }
+
+  Future<void> _loadRecords() async {
+    setState(() => _isLoadingRecords = true);
+    var records = <Map<String, dynamic>>[];
+    try {
+      records = await ApiClient().getNewestRecords();
+    } on ApiException {
+      // Show the empty state if the backend is unreachable.
+    }
+    if (!mounted) return;
+    setState(() {
+      _records = records;
+      _isLoadingRecords = false;
+    });
   }
 
   /// Local midnight on the most recent Sunday (today if today is Sunday).
@@ -416,7 +435,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           ),
         ),
       );
-      await Future.wait([_loadProgram(), _loadWeek()]);
+      // Finishing a workout can set new PRs, so refresh those too.
+      await Future.wait([_loadProgram(), _loadWeek(), _loadRecords()]);
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -587,45 +607,102 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionTitle('Personal Bests', 29, color: navy),
-          const SizedBox(height: 18),
-          Row(
-            children: List.generate(4, (index) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: index == 3 ? 0 : 6,
-                    left: index == 0 ? 0 : 2,
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Workout ${index + 1}',
-                        textAlign: TextAlign.center,
-                        style: _personalBestLabelStyle,
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(minHeight: 46),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: paleBlue,
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        child: Text(
-                          _personalBests[index],
-                          style: _personalBestValueStyle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
+          const SizedBox(height: 4),
+          const Text(
+            'Your newest records',
+            style: TextStyle(color: Colors.black54, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            decoration: BoxDecoration(
+              color: paleBlue,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: _buildRecordsTable(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildRecordsTable() {
+    if (_isLoadingRecords) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: navy),
+          ),
+        ),
+      );
+    }
+
+    if (_records.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
+        child: Text(
+          'No records yet. Finish a workout to set your first PR.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.black54, fontSize: 14),
+        ),
+      );
+    }
+
+    const divider = BorderSide(color: lightBlue, width: 1);
+
+    TableRow row(List<String> cells, TextStyle style, {bool lastRow = false}) {
+      return TableRow(
+        decoration: BoxDecoration(
+          border: lastRow ? null : const Border(bottom: divider),
+        ),
+        children: [
+          for (var i = 0; i < cells.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                cells[i],
+                textAlign: i == 0 ? TextAlign.left : TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(2.2),
+        1: FlexColumnWidth(1.2),
+        2: FlexColumnWidth(0.8),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        row(const ['LIFT', 'WEIGHT', 'REPS'], _prHeaderStyle),
+        for (var i = 0; i < _records.length; i++)
+          row(
+            [
+              _records[i]['lift_name'] as String? ?? 'Exercise',
+              '${_formatWeight(_records[i]['weight'])} lb',
+              '${(_records[i]['reps'] as num?)?.toInt() ?? 0}',
+            ],
+            _prCellStyle,
+            lastRow: i == _records.length - 1,
+          ),
+      ],
+    );
+  }
+
+  /// Drops the trailing ".0" so 225.0 shows as "225" but 102.5 stays "102.5".
+  String _formatWeight(Object? raw) {
+    final weight = (raw as num?)?.toDouble() ?? 0;
+    return weight == weight.roundToDouble()
+        ? weight.toInt().toString()
+        : weight.toString();
   }
 
   Widget _buildSectionTitle(String title, double size, {Color color = white}) {

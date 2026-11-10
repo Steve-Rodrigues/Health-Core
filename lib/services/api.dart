@@ -183,6 +183,20 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Returns the user's 3 most recent personal records, newest first.
+  /// Each entry has `lift_name`, `weight` and `reps`.
+  Future<List<Map<String, dynamic>>> getNewestRecords() async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/lifting/newest-records'),
+        headers: _headers(),
+      ),
+      action: 'loading your personal records',
+    );
+    final body = _jsonMap(response);
+    return (body['records'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
+  }
+
   Future<Map<String, dynamic>> getNutritionSummary(DateTime day) async {
     final response = await _request(
       () => _client.get(
