@@ -347,6 +347,13 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
     for program_exercise, exercise in all_exercises:
         curr_exercise = {} #build this and append to lift_data each time-- stores {exercise, exercise_id, sets, reps}
         curr_exercise['exercise'], curr_exercise['exercise_id'], curr_exercise['sets'], curr_exercise['reps'] = exercise.name,exercise.id,program_exercise.sets,program_exercise.reps
+        #get the last weight the user used for this exercise so we can give them a recommendation
+        last_used_weight = db.scalar(select(Workout_Set.weight)
+                                     .join(Workout,Workout.id==Workout_Set.workout_id)
+                                     .where(Workout.user_id==user_id,Workout_Set.exercise_id==exercise.id)
+                                     .order_by(Workout.started_at.desc())
+                                     .limit(1))
+        curr_exercise['recommended_weight'] = last_used_weight
         result_obj['lift_data'].append(curr_exercise)
     db.refresh(workout)
     result_obj['workout_id'] = workout.id

@@ -19,14 +19,14 @@ class WorkoutExercise {
   final String name;
   final int sets;
   final int reps;
-  final double recommendedWeight;
+  final double? recommendedWeight; //null when the user has never done this exercise
 
   const WorkoutExercise({
     this.exerciseId,
     required this.name,
     required this.sets,
     required this.reps,
-    required this.recommendedWeight,
+    this.recommendedWeight,
   });
 }
 
@@ -169,7 +169,9 @@ class _WorkoutSessionScreenState
     );
   }
 
-  String _formatWeight(double value) {
+  //empty string when there is no recommendation so the weight box starts blank
+  String _formatWeight(double? value) {
+    if (value == null) return '';
     return value == value.roundToDouble()
         ? value.toStringAsFixed(0)
         : value.toString();
@@ -526,16 +528,17 @@ class _WorkoutSessionScreenState
                   fontSize: 15,
                 ),
               ),
-              Text(
-                'Recommended: '
-                '${_formatWeight(_currentExercise.recommendedWeight)} '
-                '${widget.weightUnit}',
-                style: const TextStyle(
-                  color: Color(0xFF71869C),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              if (_currentExercise.recommendedWeight != null)
+                Text(
+                  'Recommended: '
+                  '${_formatWeight(_currentExercise.recommendedWeight)} '
+                  '${widget.weightUnit}',
+                  style: const TextStyle(
+                    color: Color(0xFF71869C),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 10),

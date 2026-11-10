@@ -420,7 +420,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
               name: lift['exercise'] as String? ?? 'Exercise',
               sets: (lift['sets'] as num?)?.toInt() ?? 0,
               reps: (lift['reps'] as num?)?.toInt() ?? 0,
-              recommendedWeight: 0,
+              recommendedWeight: (lift['recommended_weight'] as num?)?.toDouble(),
             ),
           )
           .toList();

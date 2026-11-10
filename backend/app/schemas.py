@@ -112,6 +112,7 @@ class Workout_Exercises_Out(BaseModel):
     exercise_id: UUID
     sets: int
     reps: int
+    recommended_weight: float | None=None #none if user has not done exercise yet
 #format to send start workout data in response to the client 
 class Start_Workout_Out(BaseModel):
     name: str
