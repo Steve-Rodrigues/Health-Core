@@ -255,4 +255,13 @@ class Lift_Array(BaseModel):
 class Send_Weekly_Lifts_Out(BaseModel):
     completed_lifts: int #number of workouts finished
     total_lifts: int #number of lifts for that week in total
-    completed_lift_array: list[Lift_Array]#
+    completed_lift_array: list[Lift_Array]
+
+#format the PR's array will be in Newest_PRs
+class Newest_Prs_Array(BaseModel):
+    lift_name: str
+    weight: float
+    reps: int
+#format to get the top 3 newest PR's 
+class Newest_PRs(BaseModel):
+    records: list[Newest_Prs_Array]

@@ -8,7 +8,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -492,4 +492,15 @@ def get_my_program(user_id: UUID = Depends(get_curr_user), db: Session = Depends
         "current_day": user_program.current_day,
         "next_day": user_program.current_day % program.number_of_days + 1, #same wraparound start-workout uses
     }
-
+#endpoint to return the 3 newest PR's recorded so the lifting dasboard can display them
+@app.get('/lifting/newest-records', response_model=Newest_PRs)
+def get_newest_records(user_id: UUID = Depends(get_curr_user), db: Session= Depends(get_db)):
+    newest_records = {'records':[]} #going to hold the 3 newest PR's if there are 3
+    top_3_records = db.execute(select(Exercise.name,Personal_Record.weight, Personal_Record.reps)
+                               .join(Exercise,Exercise.id==Personal_Record.exercise_id)
+                               .where(Personal_Record.user_id==user_id)
+                               .order_by(Personal_Record.achieved_at.desc()).
+                               limit(3)).all()
+    for pr in top_3_records:
+        newest_records['records'].append({'lift_name':pr.name,'weight':pr.weight,'reps':pr.reps})
+    return newest_records
