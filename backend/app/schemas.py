@@ -196,6 +196,7 @@ class My_Program_Out(BaseModel):
     split: str
     current_day: int
     next_day: int
+    estimated_completion_time: float | None  =None
     model_config = ConfigDict(from_attributes=True)
 
 #format to take the chosen program in from the client after the user chooses one

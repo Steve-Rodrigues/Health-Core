@@ -49,6 +49,7 @@ class Workout(Base):
     program_id : Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey('programs.id', ondelete='SET NULL'), nullable=True) #FK link to program the user doing this workout is following in our Program tb-- SET NULL so deleting a program keeps workout history
     started_at : Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at : Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True) #set when the user finishes the workout
+    day: Mapped[int | None] = mapped_column(Integer(), nullable=True) #stores the program day it corresponds to 
     notes : Mapped[str | None] = mapped_column(String(),nullable=True) #this is a column for any notes associated with the workout, optional
     user: Mapped["User"] = relationship(back_populates='workouts')
 
