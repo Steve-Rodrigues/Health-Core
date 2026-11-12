@@ -222,6 +222,19 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// The user's most frequently logged meals (up to 5), each with its macros.
+  Future<List<Map<String, dynamic>>> getMostCommonMeals() async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/nutrition/most-common'),
+        headers: _headers(),
+      ),
+      action: 'loading your common meals',
+    );
+    final meals = _jsonMap(response)['meals'] as List? ?? [];
+    return meals.cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, dynamic>> createMeal({
     required String mealName,
     required String mealType,
