@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -128,6 +128,34 @@ def get_nutrition_summary(day:date, user_id: UUID = Depends(get_curr_user), db: 
     }
     return return_data
 
+#endpoint to give the user their top 5 most common meals for a quick add feature so they dont need to type them out each time
+@app.get('/nutrition/most-common', response_model=Most_Common_Meals)
+def get_most_common_meals(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    most_common = {'meals':[]} #holds the meals in an array of objects
+    #getting the meals-- to change how many just change the limit at the end of the query
+    #we get the most common meal names first and then get the macros for each one after
+    top_meal_names = db.execute(select(func.lower(Meal.meal_name).label('meal_name'),func.count().label('meal_count'))
+                           .where(Meal.user_id==user_id)
+                           .group_by(func.lower(Meal.meal_name))
+                           .order_by(func.count().desc())
+                           .limit(5)).all()
+    meal_names = [meal.meal_name for meal in top_meal_names] #holds the meal names for the next query
+    top_meals = db.scalars(select(Meal)
+                           .where(Meal.user_id==user_id, func.lower(Meal.meal_name).in_(meal_names))
+                           .distinct(func.lower(Meal.meal_name))).all() #grabs the 5 meals using the names
+    for meal in top_meals:
+        most_common['meals'].append({
+            'meal_date': meal.meal_date,
+            'created_at': meal.created_at,
+            'meal_name': meal.meal_name,
+            'calories': meal.calories,
+            'protein': meal.protein,
+            'carbs': meal.carbs,
+            'fat': meal.fat
+        }) #adds each meal to the obj
+    return most_common
+    
+    
 #endpoint to add a meal from user
 @app.post('/nutrition/create-meal', response_model=Create_Meal_Out, status_code=status.HTTP_201_CREATED)
 def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
@@ -563,6 +591,3 @@ def get_workout_from_current_week(workout_id:UUID, user_id: UUID = Depends(get_c
         best = max(exercises, key=lambda e: e.weight*(1+e.reps/30)) #highest estimated 1RM (Epley)
         summary['best_exercise'] = {'exercise_name': best.name, 'sets': best.sets, 'reps': best.reps, 'weight': best.weight}
     return summary
-
-    
-

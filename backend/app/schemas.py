@@ -279,3 +279,16 @@ class Week_Workout_Out(BaseModel):
     total_volume: float #Workout Set
     best_exercise: Best_Workout_Today | None = None #Workout Set
     model_config = ConfigDict(from_attributes=True)
+
+#format to send the top 5 most frequently logged meals the user eats
+class Single_Meal(BaseModel):
+    meal_date: date
+    created_at: datetime
+    meal_name: str
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    model_config = ConfigDict(from_attributes=True)
+class Most_Common_Meals(BaseModel):
+    meals: list[Single_Meal]
