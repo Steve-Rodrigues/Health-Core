@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -417,7 +417,7 @@ def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Dep
 
 #Endpoint for getting the workout summary page info. Happens once the user clicks finish workout
 @app.post('/lifting/{workout_id}/finish-workout', response_model= Workout_Summary_Out, status_code=status.HTTP_200_OK)
-def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+def get_workout_summary(body:Finish_Workout_In,workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
     current_workout = db.scalar(select(Workout).where(Workout.id==workout_id,Workout.user_id==user_id))
     if current_workout is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Workout does not exist')
     if current_workout.completed_at is not None: raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Workout is not active')
@@ -451,6 +451,15 @@ def get_workout_summary(workout_id: UUID, user_id: UUID = Depends(get_curr_user)
         else: summary_stats['best_exercise'] = None
     #get the workout name and the current day and total days
     summary_stats['workout_name'],summary_stats['workout_day'],summary_stats['total_days'] = user_program.program.name,user_program.current_day,user_program.program.number_of_days
+
+    #check if there were any PR's in this workout
+    summary_stats['pr'] = []
+    pr_check = db.execute(select(Exercise.name, Personal_Record.weight, Personal_Record.reps)
+                          .where(Personal_Record.user_id==user_id,current_workout.started_at <= Personal_Record.achieved_at, Personal_Record.achieved_at <= current_workout.completed_at)
+                          .join(Exercise, Personal_Record.exercise_id == Exercise.id)).all()
+    for pr in pr_check:
+        curr_pr = {'name': pr.name, 'weight':pr.weight, 'reps':pr.reps}
+        summary_stats['pr'].append(curr_pr)
     return summary_stats
 
 #endpoint for finalizing the workout-- clicking the save/finish workout button on the summary screen. Only thing being added is the optional notes section to the existing workout row in the db
@@ -619,8 +628,48 @@ def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = D
             program_day['exercises'].append(current_exercise)
         program_day['number_exercises'] = num_exercises
         program_day['number_sets'] = num_sets
-        program_day['day'] = i
         program_summary['days'].append(program_day) #now it starts over
     return program_summary
+
+#endpoint to get all of the exercises for the PR section so the user can search over them
+@app.get('/lifting/exercises', response_model=Exercise_List_Out)
+def get_all_exercises(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    exercises = db.execute(select(Exercise.id, Exercise.name, Exercise.primary_muscle)
+                           .where(Exercise.exercise_category.not_in(['cardio','stretching','plyometrics']))
+                           .order_by(Exercise.primary_muscle, Exercise.name)).all()
+    if len(exercises) == 0: raise HTTPException(500, 'Could not get any exercises')
+    return {'exercises': exercises}
+
+#endpoint to set a PR from the user PR section
+@app.post('/lifting/set-pr', status_code=status.HTTP_201_CREATED)
+def set_personal_record(body:Personal_Record_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    exercise = db.scalar(select(Exercise).where(Exercise.id == body.exercise_id))
+    if exercise is None: raise HTTPException(404, 'Exercise not in the database')
+    prior_record = db.scalar(select(Personal_Record).where(Personal_Record.user_id==user_id,Personal_Record.exercise_id==body.exercise_id))
+    if prior_record is None: #nothing set for this exercise so just log it
+        record = Personal_Record(user_id=user_id, exercise_id=body.exercise_id, weight=body.weight, reps=body.reps)
+        try:
+            db.add(record)
+            db.commit()
+            return {'new_pr': True}
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(500, 'Could not log the record')
+    #need to check if the new one has a better one rep max than the old one
+    else:
+        new_max = body.weight*(1+(body.reps/30))
+        curr_max = prior_record.weight*(1+(prior_record.reps/30))
+        if new_max > curr_max:#overwrite
+            prior_record.weight = body.weight
+            prior_record.reps = body.reps
+            prior_record.achieved_at = func.now()
+            try:
+                db.commit()
+                return {'new_pr': True}
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(500, 'Could not update the record')
+    return {'new_pr': False}
+
 
 

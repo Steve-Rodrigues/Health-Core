@@ -142,6 +142,11 @@ class Best_Workout_Today(BaseModel):
     sets: int
     reps: int
     weight: float
+#object for each pr found
+class PR_Completed(BaseModel):
+    name: str
+    weight: float
+    reps: int
 #format we send the summary in for the completed workout page
 class Workout_Summary_Out(BaseModel):
     workout_name: str
@@ -152,6 +157,7 @@ class Workout_Summary_Out(BaseModel):
     number_sets: int
     total_volume: float
     best_exercise: Best_Workout_Today | None = None
+    pr: list[PR_Completed] | None = None
     model_config = ConfigDict(from_attributes=True)
 
 #format for recieving the notes from the client when finish workout is pressed in summary
@@ -311,3 +317,22 @@ class Program_Summary_Out(BaseModel):
     description: str #Program
     #now we have an array of each day in the program
     days: list[Program_Day] #list of objects 
+
+#format to send the exercise list to the frontend for the pr searching
+class Exercise_Option(BaseModel):
+    id: UUID
+    name: str
+    primary_muscle: str
+class Exercise_List_Out(BaseModel):
+    exercises: list[Exercise_Option]
+
+#format to take in the set pr body info
+class Personal_Record_In(BaseModel):
+    exercise_id: UUID
+    weight: float = Field(ge=0)
+    reps: int = Field(gt=0)
+
+#format to take in the request to finish a workout-- just has the local date
+class Finish_Workout_In(BaseModel):
+    local_date: date
+
