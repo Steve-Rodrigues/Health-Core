@@ -168,6 +168,42 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Every exercise a PR can be logged for, sorted by muscle then name.
+  /// Each has `id`, `name` and `primary_muscle`.
+  Future<List<Map<String, dynamic>>> getExercises() async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/lifting/exercises'),
+        headers: _headers(),
+      ),
+      action: 'loading exercises',
+    );
+    final body = _jsonMap(response);
+    return (body['exercises'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// Logs a PR the user entered by hand. Returns true if it replaced (or is
+  /// their first) record for that exercise, false if their old PR is better.
+  Future<bool> setPersonalRecord({
+    required String exerciseId,
+    required double weight,
+    required int reps,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/lifting/set-pr'),
+        headers: _headers(),
+        body: jsonEncode({
+          'exercise_id': exerciseId,
+          'weight': weight,
+          'reps': reps,
+        }),
+      ),
+      action: 'saving your PR',
+    );
+    return _jsonMap(response)['new_pr'] == true;
+  }
+
   /// Saves the program the user picked as their current program.
   Future<void> chooseProgram(String programId) async {
     final response = await _request(
@@ -397,6 +433,8 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Saves a finished exercise. PRs from the workout come back later in the
+  /// finish-workout summary's `pr` list.
   Future<void> finishExercise({
     required String workoutId,
     required String exerciseId,
@@ -420,11 +458,14 @@ class ApiClient {
     _ensureSuccess(response);
   }
 
+  /// Ends the workout. Sends the user's local date at the moment they tapped
+  /// Finish so the backend doesn't have to guess the day from UTC.
   Future<Map<String, dynamic>> finishWorkout(String workoutId) async {
     final response = await _request(
       () => _client.post(
         Uri.parse('$_baseUrl/lifting/$workoutId/finish-workout'),
         headers: _headers(),
+        body: jsonEncode({'local_date': _dateString(DateTime.now())}),
       ),
       action: 'finishing your workout',
     );

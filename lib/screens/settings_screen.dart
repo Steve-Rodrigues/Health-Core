@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'log_pr_screen.dart';
 import 'welcome_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -49,6 +50,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(Icons.emoji_events_outlined, color: Color(0xFF062D63)),
+              title: const Text('Personal Records'),
+              subtitle: const Text('Log a PR you set outside the app'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LogPrScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Card(
             elevation: 0,
             color: Colors.white,

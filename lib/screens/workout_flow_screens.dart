@@ -49,10 +49,12 @@ class WorkoutPlan {
 class CompletedExercise {
   final WorkoutExercise exercise;
   final double workingWeight;
+  final bool isPr; // beat the previous personal record for this exercise
 
   const CompletedExercise({
     required this.exercise,
     required this.workingWeight,
+    this.isPr = false,
   });
 
   double get volume =>
@@ -250,12 +252,29 @@ class _WorkoutSessionScreenState
     final backendSummary = widget.workoutId == null
         ? null
         : await _finishBackendWorkout(widget.workoutId!);
+
+    // The backend's `pr` list holds every PR set during this workout.
+    final prNames = (backendSummary?['pr'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((pr) => pr['name'])
+        .whereType<String>()
+        .toSet();
+    final completed = _completedExercises
+        .map(
+          (c) => CompletedExercise(
+            exercise: c.exercise,
+            workingWeight: c.workingWeight,
+            isPr: prNames.contains(c.exercise.name),
+          ),
+        )
+        .toList();
+
     final summary = WorkoutSummary(
       workoutId: widget.workoutId,
       workoutTitle: widget.plan.title,
       durationMinutes: (backendSummary?['duration'] as num?)?.round() ??
           _stopwatch.elapsed.inMinutes,
-      completedExercises: List.unmodifiable(_completedExercises),
+      completedExercises: List.unmodifiable(completed),
       notes: '',
       dayNumber: widget.plan.dayNumber,
       totalDays: widget.plan.totalDays,
@@ -964,13 +983,40 @@ class _WorkoutCompleteScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          completed.exercise.name,
-                          style: const TextStyle(
-                            color: workoutNavy,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                completed.exercise.name,
+                                style: const TextStyle(
+                                  color: workoutNavy,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            if (completed.isPr) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF1C2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'New PR!',
+                                  style: TextStyle(
+                                    color: Color(0xFF8A6100),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 5),
                         Text(
