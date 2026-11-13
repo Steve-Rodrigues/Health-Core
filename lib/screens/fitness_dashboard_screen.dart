@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'fitness_goals_screen.dart';
 import 'health_screen.dart';
 import 'nutrition_screen.dart';
+import 'program_overview_screen.dart';
 import 'program_survey_screen.dart';
 import 'settings_screen.dart';
 import 'workout_flow_screens.dart';
@@ -251,6 +252,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     required String label,
     required IconData icon,
     required VoidCallback onTap,
+    double iconAngle = 0,
   }) {
     return InkWell(
       onTap: onTap,
@@ -266,7 +268,10 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
                 shape: BoxShape.circle,
                 color: Color(0xFF0C61B9),
               ),
-              child: Icon(icon, color: white, size: 30),
+              child: Transform.rotate(
+                angle: iconAngle,
+                child: Icon(icon, color: white, size: 30),
+              ),
             ),
             const SizedBox(height: 7),
             Text(label, style: _smallActionLabelStyle),
@@ -477,30 +482,32 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildHeaderAction(
-          label: 'Exercises',
-          icon: Icons.fitness_center,
-          onTap: _showExerciseLibraryMessage,
-        ),
-        _buildHeaderAction(
           label: 'Programs',
-          icon: Icons.list_alt_rounded,
-          onTap: _openProgramSurvey,
+          icon: Icons.fitness_center,
+          iconAngle: -math.pi / 4, // tilt the dumbbell like the mockup
+          onTap: _openProgramOverview,
         ),
         _buildHeaderAction(
           label: 'Goals',
           icon: Icons.flag_rounded,
           onTap: _openGoals,
         ),
+        _buildHeaderAction(
+          label: 'Builder',
+          icon: Icons.list_alt_rounded,
+          onTap: _openProgramSurvey,
+        ),
       ],
     );
   }
 
-  void _showExerciseLibraryMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Connect this button to your exercise library.'),
-      ),
+  Future<void> _openProgramOverview() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProgramOverviewScreen()),
     );
+    // The user may have built a program from the empty state in there.
+    await Future.wait([_loadProgram(), _loadWeek()]);
   }
 
   Widget _buildConsistency() {

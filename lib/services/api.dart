@@ -153,6 +153,21 @@ class ApiClient {
     return body;
   }
 
+  /// Returns every day of the user's program: `goal`, `name`, `description`
+  /// and `days` (each with `day`, `number_exercises`, `number_sets` and
+  /// `exercises` of `name`/`sets`/`reps`). Returns null if they have no program.
+  Future<Map<String, dynamic>?> getProgramDays() async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/lifting/get-program/days'),
+        headers: _headers(),
+      ),
+      action: 'loading your program days',
+    );
+    if (response.statusCode == 404) return null;
+    return _jsonMap(response);
+  }
+
   /// Saves the program the user picked as their current program.
   Future<void> chooseProgram(String programId) async {
     final response = await _request(
