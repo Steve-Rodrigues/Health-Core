@@ -46,19 +46,36 @@ class WorkoutPlan {
   });
 }
 
+// One set row that got sent to the backend. completed=false means the user
+// hit skip (sent as sets: 0); it still exists so we know it was missed.
+class LoggedSet {
+  final int reps;
+  final double weight;
+  final bool completed;
+
+  const LoggedSet({
+    required this.reps,
+    required this.weight,
+    this.completed = true,
+  });
+
+  double get volume => completed ? reps * weight : 0;
+}
+
 class CompletedExercise {
   final WorkoutExercise exercise;
-  final double workingWeight;
+  final List<LoggedSet> sets; // every set row, done or skipped, in order
   final bool isPr; // beat the previous personal record for this exercise
 
   const CompletedExercise({
     required this.exercise,
-    required this.workingWeight,
+    required this.sets,
     this.isPr = false,
   });
 
-  double get volume =>
-      exercise.sets * exercise.reps * workingWeight;
+  List<LoggedSet> get doneSets => sets.where((s) => s.completed).toList();
+
+  double get volume => sets.fold(0, (sum, s) => sum + s.volume);
 }
 
 class WorkoutSummary {
@@ -82,7 +99,7 @@ class WorkoutSummary {
 
   int get totalSets => completedExercises.fold(
         0,
-        (sum, item) => sum + item.exercise.sets,
+        (sum, item) => sum + item.doneSets.length,
       );
 
   double get totalVolume => completedExercises.fold(
@@ -148,27 +165,56 @@ class WorkoutSessionScreen extends StatefulWidget {
 class _WorkoutSessionScreenState
     extends State<WorkoutSessionScreen> {
   late final Stopwatch _stopwatch;
-  late final TextEditingController _weightController;
 
   int _currentExerciseIndex = 0;
   final List<CompletedExercise> _completedExercises = [];
+
+  // One weight/reps box per planned set of the current exercise.
+  // _loggedSets[i] is null until set i has been saved.
+  List<TextEditingController> _weightControllers = [];
+  List<TextEditingController> _repsControllers = [];
+  List<LoggedSet?> _loggedSets = [];
+  int? _savingSetIndex; // which set is mid-request, so we can show a spinner
 
   bool _isFinishing = false;
 
   WorkoutExercise get _currentExercise =>
       widget.plan.exercises[_currentExerciseIndex];
 
+  int get _loggedCount => _loggedSets.whereType<LoggedSet>().length;
+
   @override
   void initState() {
     super.initState();
 
     _stopwatch = Stopwatch()..start();
+    _setUpSetRows();
+  }
 
-    _weightController = TextEditingController(
-      text: _formatWeight(
-        widget.plan.exercises.first.recommendedWeight,
+  // Builds a row for every set the program prescribes for this exercise,
+  // prefilled with the recommended weight and target reps.
+  void _setUpSetRows() {
+    _disposeSetControllers();
+    final exercise = _currentExercise;
+    final setCount = exercise.sets < 1 ? 1 : exercise.sets;
+
+    _weightControllers = List.generate(
+      setCount,
+      (_) => TextEditingController(
+        text: _formatWeight(exercise.recommendedWeight),
       ),
     );
+    _repsControllers = List.generate(
+      setCount,
+      (_) => TextEditingController(text: '${exercise.reps}'),
+    );
+    _loggedSets = List.filled(setCount, null);
+  }
+
+  void _disposeSetControllers() {
+    for (final c in [..._weightControllers, ..._repsControllers]) {
+      c.dispose();
+    }
   }
 
   //empty string when there is no recommendation so the weight box starts blank
@@ -182,60 +228,134 @@ class _WorkoutSessionScreenState
   @override
   void dispose() {
     _stopwatch.stop();
-    _weightController.dispose();
+    _disposeSetControllers();
     super.dispose();
   }
 
-  Future<void> _completeExercise() async {
-    final weight = double.tryParse(_weightController.text);
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
+  }
 
-    if (weight == null || !weight.isFinite || weight < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid working weight.'),
-        ),
-      );
-      return;
+  // Sends one set row to the backend (sets: 1 if done, 0 if skipped).
+  // Returns true if it saved. Skipped sets still send the planned
+  // weight/reps so the row shows what was missed.
+  Future<bool> _sendSet(int index, {required bool completed}) async {
+    final exercise = _currentExercise;
+    var weight = double.tryParse(_weightControllers[index].text);
+    var reps = int.tryParse(_repsControllers[index].text);
+
+    if (completed) {
+      if (weight == null || !weight.isFinite || weight < 0) {
+        _showError('Enter a valid weight for set ${index + 1}.');
+        return false;
+      }
+      if (reps == null || reps < 1) {
+        _showError('Enter how many reps you did for set ${index + 1}.');
+        return false;
+      }
+    } else {
+      // whatever is in the boxes doesn't matter much for a skip, so fall
+      // back to the plan instead of blocking the user
+      if (weight == null || !weight.isFinite || weight < 0) {
+        weight = exercise.recommendedWeight ?? 0;
+      }
+      if (reps == null || reps < 0) reps = exercise.reps;
     }
 
-    if (widget.workoutId != null && _currentExercise.exerciseId != null) {
-      try {
+    setState(() => _savingSetIndex = index);
+    try {
+      if (widget.workoutId != null && exercise.exerciseId != null) {
         await ApiClient().finishExercise(
           workoutId: widget.workoutId!,
-          exerciseId: _currentExercise.exerciseId!,
-          sets: _currentExercise.sets,
-          reps: _currentExercise.reps,
+          exerciseId: exercise.exerciseId!,
+          reps: reps,
           weight: weight,
+          completed: completed,
         );
-      } on ApiException catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error.message),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
+      }
+    } on ApiException catch (error) {
+      if (mounted) _showError(error.message);
+      return false;
+    } finally {
+      if (mounted) setState(() => _savingSetIndex = null);
+    }
+
+    if (!mounted) return false;
+    setState(() {
+      _loggedSets[index] =
+          LoggedSet(reps: reps!, weight: weight!, completed: completed);
+      // Carry a changed weight forward so they don't retype it every set.
+      if (completed) {
+        for (var i = index + 1; i < _loggedSets.length; i++) {
+          if (_loggedSets[i] == null) {
+            _weightControllers[i].text = _formatWeight(weight);
+          }
         }
-        return;
+      }
+    });
+    return true;
+  }
+
+  Future<void> _onSetButton(int index, {required bool completed}) async {
+    if (_savingSetIndex != null || _loggedSets[index] != null) return;
+    FocusScope.of(context).unfocus();
+    await _sendSet(index, completed: completed);
+  }
+
+  Future<void> _completeExercise() async {
+    if (_savingSetIndex != null) return;
+
+    final remaining = _loggedSets.length - _loggedCount;
+    if (remaining > 0) {
+      final skip = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            _loggedCount == 0 ? 'Skip this exercise?' : 'Skip remaining sets?',
+          ),
+          content: Text(
+            '$remaining set${remaining == 1 ? '' : 's'} of '
+            '${_currentExercise.name} will be marked as skipped.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Keep going'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Skip'),
+            ),
+          ],
+        ),
+      );
+      if (skip != true || !mounted) return;
+
+      // Save every open set as skipped (sets: 0), one request at a time.
+      // If one fails we stop here so nothing gets double-sent on retry.
+      for (var i = 0; i < _loggedSets.length; i++) {
+        if (_loggedSets[i] != null) continue;
+        final ok = await _sendSet(i, completed: false);
+        if (!ok || !mounted) return;
       }
     }
 
+    final logged = _loggedSets.whereType<LoggedSet>().toList();
     setState(() {
-      _completedExercises.add(
-        CompletedExercise(
-          exercise: _currentExercise,
-          workingWeight: weight,
-        ),
-      );
+      // only show it in the recap if at least one set was actually done
+      if (logged.any((s) => s.completed)) {
+        _completedExercises.add(
+          CompletedExercise(exercise: _currentExercise, sets: logged),
+        );
+      }
     });
 
     if (_currentExerciseIndex < widget.plan.exercises.length - 1) {
       setState(() {
         _currentExerciseIndex++;
-
-        _weightController.text = _formatWeight(
-          _currentExercise.recommendedWeight,
-        );
+        _setUpSetRows();
       });
     } else {
       _finishWorkout();
@@ -263,7 +383,7 @@ class _WorkoutSessionScreenState
         .map(
           (c) => CompletedExercise(
             exercise: c.exercise,
-            workingWeight: c.workingWeight,
+            sets: c.sets,
             isPr: prNames.contains(c.exercise.name),
           ),
         )
@@ -471,7 +591,12 @@ class _WorkoutSessionScreenState
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: LinearProgressIndicator(
-            value: _completedExercises.length / totalExercises,
+            // finished exercises + how far through the current one's sets
+            value: (_currentExerciseIndex +
+                    (_loggedSets.isEmpty
+                        ? 0
+                        : _loggedCount / _loggedSets.length)) /
+                totalExercises,
             minHeight: 12,
             backgroundColor: workoutLightBlue,
             valueColor: const AlwaysStoppedAnimation<Color>(
@@ -530,9 +655,9 @@ class _WorkoutSessionScreenState
           const SizedBox(height: 24),
           Row(
             children: [
-              _statBox('SETS', '${_currentExercise.sets}'),
+              _statBox('SETS', '$_loggedCount / ${_loggedSets.length}'),
               const SizedBox(width: 12),
-              _statBox('REPS', '${_currentExercise.reps}'),
+              _statBox('TARGET REPS', '${_currentExercise.reps}'),
             ],
           ),
           const SizedBox(height: 26),
@@ -540,7 +665,7 @@ class _WorkoutSessionScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Working weight',
+                'Log your sets',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: workoutText,
@@ -560,55 +685,224 @@ class _WorkoutSessionScreenState
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _weightController,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(
-                RegExp(r'^\d*\.?\d*'),
-              ),
-            ],
-            decoration: InputDecoration(
-              suffixText: widget.weightUnit,
-              filled: true,
-              fillColor: const Color(0xFFF9FCFF),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 17,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: Color(0xFFD5E5F1),
-                  width: 2,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: workoutBlue,
-                  width: 2,
-                ),
-              ),
-            ),
-            style: const TextStyle(
-              color: workoutText,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          _buildSetHeader(),
+          const SizedBox(height: 6),
+          for (var i = 0; i < _loggedSets.length; i++) _buildSetRow(i),
+          const SizedBox(height: 8),
           const Text(
-            "Adjust the recommendation to match today's readiness.",
+            'Tap ✓ after each set, or ✕ if you skip it. Changing the weight '
+            'carries it to the sets below.',
             style: TextStyle(
               color: Color(0xFF71869C),
               fontSize: 13,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSetHeader() {
+    const style = TextStyle(
+      color: Color(0xFF667D9A),
+      fontWeight: FontWeight.bold,
+      fontSize: 11,
+      letterSpacing: 0.6,
+    );
+    return Row(
+      children: [
+        const SizedBox(width: 32, child: Text('SET', style: style)),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 3,
+          child: Text('WEIGHT (${widget.weightUnit.toUpperCase()})',
+              style: style),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(flex: 2, child: Text('REPS', style: style)),
+        const SizedBox(width: 100), // skip + done buttons
+      ],
+    );
+  }
+
+  Widget _buildSetRow(int index) {
+    final logged = _loggedSets[index];
+    final isDone = logged?.completed == true;
+    final isSkipped = logged != null && !logged.completed;
+    final isSaving = _savingSetIndex == index;
+    final locked = logged != null || isSaving;
+    final busy = _savingSetIndex != null;
+
+    const doneGreen = Color(0xFF397C61);
+    const skipGrey = Color(0xFF9AA9BA);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isDone
+                  ? doneGreen
+                  : isSkipped
+                      ? skipGrey
+                      : workoutLightBlue,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(
+                color: logged != null ? Colors.white : workoutText,
+                fontWeight: FontWeight.bold,
+                decoration: isSkipped ? TextDecoration.lineThrough : null,
+                decorationColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 3,
+            child: _setField(
+              controller: _weightControllers[index],
+              enabled: !locked,
+              decimal: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: _setField(
+              controller: _repsControllers[index],
+              enabled: !locked,
+              decimal: false,
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isSaving)
+            const SizedBox(
+              width: 92,
+              height: 44,
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              ),
+            )
+          else ...[
+            _setButton(
+              icon: Icons.close_rounded,
+              tooltip: isSkipped ? 'Skipped' : 'Skip set ${index + 1}',
+              // outlined grey until chosen, solid grey once skipped
+              color: skipGrey,
+              filled: isSkipped,
+              hidden: isDone,
+              onPressed: (locked || busy)
+                  ? null
+                  : () => _onSetButton(index, completed: false),
+            ),
+            const SizedBox(width: 4),
+            _setButton(
+              icon: Icons.check_rounded,
+              tooltip: isDone ? 'Done' : 'Log set ${index + 1}',
+              color: isDone ? doneGreen : workoutBlue,
+              filled: !isSkipped,
+              hidden: isSkipped,
+              onPressed: (locked || busy)
+                  ? null
+                  : () => _onSetButton(index, completed: true),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Square icon button used for skip / done. `hidden` keeps the space so
+  // the rows stay lined up once the other option has been picked.
+  Widget _setButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required bool filled,
+    required bool hidden,
+    required VoidCallback? onPressed,
+  }) {
+    if (hidden) return const SizedBox(width: 44, height: 44);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(13),
+    );
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: filled
+          ? IconButton.filled(
+              onPressed: onPressed,
+              tooltip: tooltip,
+              style: IconButton.styleFrom(
+                backgroundColor: color,
+                disabledBackgroundColor:
+                    onPressed == null && color == workoutBlue
+                        ? const Color(0xFFD5E5F1)
+                        : color,
+                shape: shape,
+              ),
+              icon: Icon(icon, color: Colors.white),
+            )
+          : IconButton.outlined(
+              onPressed: onPressed,
+              tooltip: tooltip,
+              style: IconButton.styleFrom(
+                side: BorderSide(color: color.withValues(alpha: 0.6), width: 2),
+                shape: shape,
+              ),
+              icon: Icon(icon, color: color),
+            ),
+    );
+  }
+
+  Widget _setField({
+    required TextEditingController controller,
+    required bool enabled,
+    required bool decimal,
+  }) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Color(0xFFD5E5F1), width: 2),
+    );
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      textAlign: TextAlign.center,
+      keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(
+          decimal ? RegExp(r'^\d*\.?\d*') : RegExp(r'^\d*'),
+        ),
+      ],
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: enabled ? const Color(0xFFF9FCFF) : workoutLightBlue,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 13,
+        ),
+        enabledBorder: border,
+        disabledBorder: border.copyWith(borderSide: BorderSide.none),
+        focusedBorder: border.copyWith(
+          borderSide: const BorderSide(color: workoutBlue, width: 2),
+        ),
+      ),
+      style: const TextStyle(
+        color: workoutText,
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
       ),
     );
   }
@@ -647,7 +941,9 @@ class _WorkoutSessionScreenState
     return SizedBox(
       height: 60,
       child: ElevatedButton(
-        onPressed: _isFinishing ? null : _completeExercise,
+        onPressed: (_isFinishing || _savingSetIndex != null)
+            ? null
+            : _completeExercise,
         style: ElevatedButton.styleFrom(
           backgroundColor: workoutBlue,
           foregroundColor: Colors.white,
@@ -718,6 +1014,9 @@ class _WorkoutCompleteScreenState
 
   bool _isSaving = false;
   bool _saved = false;
+
+  String _fmt(double w) =>
+      w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toString();
 
   @override
   void dispose() {
@@ -1020,8 +1319,12 @@ class _WorkoutCompleteScreenState
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          '${completed.exercise.sets} sets × '
-                          '${completed.exercise.reps} reps',
+                          // e.g. "135×10 · 135×10 · skipped"
+                          completed.sets
+                              .map((s) => s.completed
+                                  ? '${_fmt(s.weight)}×${s.reps}'
+                                  : 'skipped')
+                              .join(' · '),
                           style: const TextStyle(
                             color: Color(0xFF71849E),
                             fontSize: 13,
@@ -1031,7 +1334,8 @@ class _WorkoutCompleteScreenState
                     ),
                   ),
                   Text(
-                    '${completed.workingWeight.toStringAsFixed(0)} lb',
+                    '${completed.doneSets.length}/${completed.sets.length} '
+                    'sets',
                     style: const TextStyle(
                       color: workoutNavy,
                       fontWeight: FontWeight.bold,

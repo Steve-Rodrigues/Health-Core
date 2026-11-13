@@ -113,6 +113,9 @@ class Workout_Exercises_Out(BaseModel):
     sets: int
     reps: int
     recommended_weight: float | None=None #none if user has not done exercise yet
+#format to take in the midnight datetime from the app because need it in local timezone
+class Start_Workout_In(BaseModel):
+    day_start: datetime #sent as midnight in the user's local timezone
 #format to send start workout data in response to the client 
 class Start_Workout_Out(BaseModel):
     name: str
@@ -124,14 +127,13 @@ class Start_Workout_Out(BaseModel):
 #format to recieve the info from a user's exercise after completion
 class Exercise_Data_In(BaseModel):
     exercise_id: UUID
-    sets: int = Field(default=0, ge=0)
     reps: int = Field(default=0, ge=0)
     weight: float = Field(default=0, ge=0)
+    sets: int = Field(ge=0,le=1)
 #format to send the data back to the client-side
 class Exercise_Data_Out(BaseModel):
     workout_id: UUID
     exercise_id: UUID
-    sets: int = Field(default=0, ge=0)
     reps: int = Field(default=0, ge=0)
     weight: float = Field(default=0, ge=0)
     model_config = ConfigDict(from_attributes=True)

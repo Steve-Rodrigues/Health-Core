@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -340,16 +340,16 @@ def get_this_weeks_workouts(start_day: datetime, user_id: UUID = Depends(get_cur
 
 #start-workout endpoint
 @app.post('/lifting/start-workout', response_model=Start_Workout_Out, status_code=status.HTTP_201_CREATED)
-def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+def start_workout(body: Start_Workout_In,user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    if body.day_start.tzinfo is None: raise HTTPException(422, 'Need a timezone to process the day')
     result_obj = {} #store the result in here
     user_program = db.scalar(select(User_Program).where(User_Program.user_id==user_id))
     if user_program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
     program = db.scalar(select(Program).where(Program.id==user_program.program_id))
     if program is None: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No active programs for the user')
     close_stale_workouts(db, user_id, keep_program_id=program.id) #clear out open workouts left over from a program they switched off of
-    #check if there was already a workout completed today-- if so then dont allow to continue because only allow 1 workout per day
-    today_date = func.current_date() #this is to check if the workout is the same date as today
-    same_day_lift = db.scalar(select(Workout).where(Workout.user_id==user_id,cast(Workout.completed_at,Date())==today_date))
+    #check if there was already a workout completed today using the midnight marker sent from frontend-- if so then dont allow to continue because only allow 1 workout per day
+    same_day_lift = db.scalar(select(Workout).where(Workout.user_id==user_id,body.day_start <= Workout.completed_at))
     if same_day_lift is not None: raise HTTPException(409, 'Can not complete 2 workouts in 1 day')
     #check if there is an active workout for this program before creating another-- tests for double clicks
     workout = db.scalar(select(Workout).where(Workout.user_id==user_id, Workout.program_id==program.id, Workout.completed_at.is_(None)))
@@ -378,17 +378,16 @@ def start_workout(user_id: UUID = Depends(get_curr_user), db: Session = Depends(
         #get the last weight the user used for this exercise so we can give them a recommendation
         last_used_weight = db.scalar(select(Workout_Set.weight)
                                      .join(Workout,Workout.id==Workout_Set.workout_id)
-                                     .where(Workout.user_id==user_id,Workout_Set.exercise_id==exercise.id)
+                                     .where(Workout.user_id==user_id,Workout_Set.exercise_id==exercise.id,Workout_Set.sets==1)
                                      .order_by(Workout.started_at.desc())
                                      .limit(1))
-        curr_exercise['recommended_weight'] = last_used_weight
+        curr_exercise['recommended_weight'] = last_used_weight if not None else None #holds None if there were no sets that were not skipped (sets=0)
         result_obj['lift_data'].append(curr_exercise)
     db.refresh(workout)
     result_obj['workout_id'] = workout.id
     return result_obj
 
 #Endpoint for when a user completes an exercise-- sends the sets/reps/weight they used. 
-# NOTE: Might change this so they send data after every set they complete
 @app.post('/lifting/{workout_id}/finish-exercise', response_model=Exercise_Data_Out, status_code=status.HTTP_201_CREATED)
 def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
     current_workout = db.scalar(select(Workout).where(Workout.id==workout_id, Workout.user_id==user_id)) #checking to see if there is an active workout
@@ -397,16 +396,18 @@ def finish_exercise(body: Exercise_Data_In,workout_id: UUID, user_id: UUID = Dep
     workout_set = Workout_Set(workout_id=workout_id,exercise_id=body.exercise_id,reps=body.reps,sets=body.sets,weight=body.weight) #create the set
     db.add(workout_set) #always save the set, PR or not
     #check if it is PR by comparing estimated 1 rep maxes using the Epley formula: weight * (1 + reps/30)
-    current_pr = db.scalar(select(Personal_Record).where(Personal_Record.exercise_id==workout_set.exercise_id, Personal_Record.user_id==user_id))
-    if current_pr is None: #first time doing this exercise so it is automatically the PR
-        db.add(Personal_Record(user_id=user_id, exercise_id=workout_set.exercise_id, weight=workout_set.weight, reps=workout_set.reps))
-    else:
-        current_max = current_pr.weight * (1 + current_pr.reps/30)
-        #new max so overwrite the old one in place
-        if current_max < (workout_set.weight * (1 + workout_set.reps/30)):
-            current_pr.weight = workout_set.weight
-            current_pr.reps = workout_set.reps
-            current_pr.achieved_at = func.now()
+    #only check pr if the set sent over was a 1 because that means the user completed it, a 0 means they did not do it
+    if workout_set.sets == 1:
+        current_pr = db.scalar(select(Personal_Record).where(Personal_Record.exercise_id==workout_set.exercise_id, Personal_Record.user_id==user_id))
+        if current_pr is None: #first time doing this exercise so it is automatically the PR
+            db.add(Personal_Record(user_id=user_id, exercise_id=workout_set.exercise_id, weight=workout_set.weight, reps=workout_set.reps))
+        else:
+            current_max = current_pr.weight * (1 + current_pr.reps/30)
+            #new max so overwrite the old one in place
+            if current_max < (workout_set.weight * (1 + workout_set.reps/30)):
+                current_pr.weight = workout_set.weight
+                current_pr.reps = workout_set.reps
+                current_pr.achieved_at = func.now()
     try:
         db.commit() #set and PR saved together so neither is saved without the other
     except IntegrityError:
@@ -436,7 +437,7 @@ def get_workout_summary(body:Finish_Workout_In,workout_id: UUID, user_id: UUID =
     workout_duration = round((current_workout.completed_at - current_workout.started_at).total_seconds() / 60,1) #gets the timedelta obj and gets the total minutes from this calculation
     summary_stats['duration'] = workout_duration
     #now get the rest through querying jumps
-    all_completed_exercises = db.scalars(select(Workout_Set).where(Workout_Set.workout_id==workout_id)).all() #gets list of each exercise done
+    all_completed_exercises = db.scalars(select(Workout_Set).where(Workout_Set.workout_id==workout_id,Workout_Set.sets==1)).all() #gets list of each exercise done
     summary_stats['number_exercises'] = len({s.exercise_id for s in all_completed_exercises})
     summary_stats['number_sets'] = sum(s.sets for s in all_completed_exercises)
     summary_stats['total_volume'] = sum(e.weight*e.reps*e.sets for e in all_completed_exercises)
@@ -588,12 +589,15 @@ def get_workout_from_current_week(workout_id:UUID, user_id: UUID = Depends(get_c
     #now lets get the exercise info-- returns a row per exercise logged during a workout
     exercises = db.execute(select(Exercise.id,Exercise.name,Workout_Set.sets,Workout_Set.weight,Workout_Set.reps)
                            .join(Exercise, Exercise.id == Workout_Set.exercise_id)
-                           .where(Workout_Set.workout_id==workout_id)).all()
+                           .where(Workout_Set.workout_id==workout_id,Workout_Set.sets==1)).all()
     summary['workout_name'] = workout.name
     summary['workout_day'] = workout.day
     summary['total_days'] = workout.number_of_days
     summary['duration'] = round((workout.completed_at - workout.started_at).total_seconds() / 60, 1) #minutes, same as the other endpoints
-    summary['number_exercises'] = len(exercises)
+    seen=set() #set to hold the alr seen exercise id's so we only count the other ones since it's by set now
+    for e in exercises:
+        seen.add(e.id)
+    summary['number_exercises'] = len(seen)
     summary['number_sets'] = sum(e.sets for e in exercises)
     summary['total_volume'] = sum(e.weight*e.reps*e.sets for e in exercises)
     if exercises: #max() crashes on an empty list, so only pick a best exercise if something was logged

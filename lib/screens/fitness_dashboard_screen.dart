@@ -759,8 +759,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${(best['sets'] as num?)?.toInt() ?? 0} × '
-                      '${(best['reps'] as num?)?.toInt() ?? 0} @ '
+                      // best_exercise is a single set now, so no "sets ×"
+                      '${(best['reps'] as num?)?.toInt() ?? 0} reps @ '
                       '${_formatWeight(best['weight'])} lb',
                       style: const TextStyle(color: Colors.black87, fontSize: 15),
                     ),
