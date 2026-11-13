@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -591,3 +591,36 @@ def get_workout_from_current_week(workout_id:UUID, user_id: UUID = Depends(get_c
         best = max(exercises, key=lambda e: e.weight*(1+e.reps/30)) #highest estimated 1RM (Epley)
         summary['best_exercise'] = {'exercise_name': best.name, 'sets': best.sets, 'reps': best.reps, 'weight': best.weight}
     return summary
+
+#endpoint to show the user all of the days of their current program so they can review it
+@app.get('/lifting/get-program/days', response_model=Program_Summary_Out)
+def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    #first get the program the user is in-- *if they are in one*
+    user_program = db.scalar(select(Program)
+                             .where(User_Program.user_id == user_id)
+                             .join(User_Program, Program.id == User_Program.program_id))
+    if user_program is None: raise HTTPException(404, 'User needs to create a program first')
+    program_summary = {'goal':user_program.goal,'name':user_program.name,'description':user_program.description,'days':[]} #this is what we will return at the end
+    num_days_program = user_program.number_of_days #this is how many days we have in our program
+    for i in range(1,num_days_program+1):
+        curr_day_exercises = db.execute(select(Exercise.name,Program_Exercise.sets,Program_Exercise.reps)
+                                        .where(Program_Exercise.program_id==user_program.id, i == Program_Exercise.day)
+                                        .join(Exercise, Program_Exercise.exercise_id==Exercise.id)).all()
+        #each day is an obj that we append to the days key
+        program_day={'day':i, 'number_exercises': None, 'number_sets':None, 'exercises':[]} #exercises is an array of objects-- one for each exercise for that day
+
+        num_exercises = len(curr_day_exercises)
+        num_sets = 0 #update after each iteration
+
+        for exercise in curr_day_exercises:
+            current_exercise = {'name':exercise.name, 'sets':exercise.sets,'reps':exercise.reps} #each exercise appended to exercises key
+            num_sets += exercise.sets #updates for each exercise
+            #append to the program_day exercise array
+            program_day['exercises'].append(current_exercise)
+        program_day['number_exercises'] = num_exercises
+        program_day['number_sets'] = num_sets
+        program_day['day'] = i
+        program_summary['days'].append(program_day) #now it starts over
+    return program_summary
+
+

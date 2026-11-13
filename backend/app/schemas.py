@@ -292,3 +292,22 @@ class Single_Meal(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 class Most_Common_Meals(BaseModel):
     meals: list[Single_Meal]
+
+#format to hold each exercise
+class Exercise_List(BaseModel):
+    name: str
+    sets: int
+    reps: int
+#format to store the programs in the array of objects
+class Program_Day(BaseModel):
+    day: int
+    number_exercises: int
+    number_sets: int
+    exercises: list[Exercise_List]
+#format to send the program days to the user
+class Program_Summary_Out(BaseModel):
+    goal: str #goal of program-- User_Program
+    name: str #Program
+    description: str #Program
+    #now we have an array of each day in the program
+    days: list[Program_Day] #list of objects 
