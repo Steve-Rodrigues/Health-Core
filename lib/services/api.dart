@@ -422,11 +422,17 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Starts (or resumes) today's workout. Sends the moment the user's local
+  /// day began, as UTC, so the backend's one-workout-per-day check uses the
+  /// user's day instead of the server's (same idea as getWeeklyWorkouts).
   Future<Map<String, dynamic>> startWorkout() async {
+    final now = DateTime.now();
+    final dayStart = DateTime(now.year, now.month, now.day); // local midnight
     final response = await _request(
       () => _client.post(
         Uri.parse('$_baseUrl/lifting/start-workout'),
         headers: _headers(),
+        body: jsonEncode({'day_start': dayStart.toUtc().toIso8601String()}),
       ),
       action: 'starting your workout',
     );
@@ -438,17 +444,19 @@ class ApiClient {
   Future<void> finishExercise({
     required String workoutId,
     required String exerciseId,
-    required int sets,
     required int reps,
     required double weight,
+    bool completed = true,
   }) async {
+    // One call per set: each set is its own workout_sets row on the backend.
+    // `sets` is a done flag: 1 = did the set, 0 = skipped it.
     final response = await _request(
       () => _client.post(
         Uri.parse('$_baseUrl/lifting/$workoutId/finish-exercise'),
         headers: _headers(),
         body: jsonEncode({
           'exercise_id': exerciseId,
-          'sets': sets,
+          'sets': completed ? 1 : 0,
           'reps': reps,
           'weight': weight,
         }),
