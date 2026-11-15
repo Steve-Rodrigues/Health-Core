@@ -510,11 +510,11 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     await Future.wait([_loadProgram(), _loadWeek()]);
   }
 
-  Widget _buildConsistency() {
+  Widget buildConsistency() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Consistency', 30),
+        buildSectionTitle('Consistency', 30),
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
@@ -771,7 +771,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-  Widget _buildPersonalBests() {
+  Widget buildPersonalBests() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 22),
@@ -881,7 +881,85 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         : weight.toString();
   }
 
-  Widget _buildSectionTitle(String title, double size, {Color color = white}) {
+  Widget _buildRecordsTable() {
+    if (_isLoadingRecords) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: navy),
+          ),
+        ),
+      );
+    }
+
+    if (_records.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
+        child: Text(
+          'No records yet. Finish a workout to set your first PR.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.black54, fontSize: 14),
+        ),
+      );
+    }
+
+    const divider = BorderSide(color: lightBlue, width: 1);
+
+    TableRow row(List<String> cells, TextStyle style, {bool lastRow = false}) {
+      return TableRow(
+        decoration: BoxDecoration(
+          border: lastRow ? null : const Border(bottom: divider),
+        ),
+        children: [
+          for (var i = 0; i < cells.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                cells[i],
+                textAlign: i == 0 ? TextAlign.left : TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(2.2),
+        1: FlexColumnWidth(1.2),
+        2: FlexColumnWidth(0.8),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        row(const ['LIFT', 'WEIGHT', 'REPS'], _prHeaderStyle),
+        for (var i = 0; i < _records.length; i++)
+          row(
+            [
+              _records[i]['lift_name'] as String? ?? 'Exercise',
+              '${_formatWeight(_records[i]['weight'])} lb',
+              '${(_records[i]['reps'] as num?)?.toInt() ?? 0}',
+            ],
+            _prCellStyle,
+            lastRow: i == _records.length - 1,
+          ),
+      ],
+    );
+  }
+
+  /// Drops the trailing ".0" so 225.0 shows as "225" but 102.5 stays "102.5".
+  String _formatWeight(Object? raw) {
+    final weight = (raw as num?)?.toDouble() ?? 0;
+    return weight == weight.roundToDouble()
+        ? weight.toInt().toString()
+        : weight.toString();
+  }
+
+  Widget buildSectionTitle(String title, double size, {Color color = white}) {
     return Text(
       title,
       style: TextStyle(
@@ -894,7 +972,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-  Widget _buildBottomNavigation() {
+  Widget buildBottomNavigation() {
     const labels = ['Fitness', 'Nutrition', 'Health', 'Settings'];
 
     const icons = [
