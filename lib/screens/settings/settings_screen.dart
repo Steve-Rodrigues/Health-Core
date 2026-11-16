@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'log_pr_screen.dart';
-import 'welcome_screen.dart';
+import '../fitness/log_pr_screen.dart';
+import '../auth/welcome_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

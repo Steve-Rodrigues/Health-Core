@@ -4,24 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'fitness_goals_screen.dart';
-import 'health_screen.dart';
-import 'nutrition_screen.dart';
+import '../health/health_screen.dart';
+import '../nutrition/nutrition_screen.dart';
 import 'program_overview_screen.dart';
 import 'program_survey_screen.dart';
-import 'settings_screen.dart';
+import '../settings/settings_screen.dart';
 import 'workout_flow_screens.dart';
-import '../services/api.dart';
+import 'workout_history_screen.dart';
+import 'body_weight_screen.dart';
+import '../../services/api.dart';
 
-class FitnessDashboardScreen extends StatefulWidget {
-  const FitnessDashboardScreen({super.key, this.onTabSelected});
+class FitnessScreen extends StatefulWidget {
+  const FitnessScreen({super.key, this.onTabSelected});
 
   final ValueChanged<int>? onTabSelected;
 
   @override
-  State<FitnessDashboardScreen> createState() => _FitnessDashboardScreenState();
+  State<FitnessScreen> createState() => _FitnessScreenState();
 }
 
-class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
+class _FitnessScreenState extends State<FitnessScreen> {
   static const Color navy = Color(0xFF062D63);
   static const Color blue = Color(0xFF086AC7);
   static const Color lightBlue = Color(0xFFC2DFF2);
@@ -61,31 +63,11 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   void _selectTab(int index) {
     setState(() => _selectedTab = index);
     widget.onTabSelected?.call(index);
-    if (index == 3) {
-      _openSettings();
-    } else if (index == 1) {
-      _openPage(const NutritionScreen());
-    } else if (index == 2) {
-      _openPage(const HealthScreen());
-    }
   }
 
   Future<void> _openPage(Widget page) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => page),
-    );
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
     if (mounted) setState(() => _selectedTab = 0);
-  }
-
-  Future<void> _openSettings() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-    );
-    if (mounted) {
-      setState(() => _selectedTab = 0);
-    }
   }
 
   Future<void> _openGoals() async {
@@ -184,39 +166,48 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: navy,
+      appBar: _selectedTab == 0
+          ? AppBar(title: const Text('Fitness'), backgroundColor: navy)
+          : null,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
-        child: SafeArea(
+        child: _buildSelectedScreen(),
+      ),
+      bottomNavigationBar: buildBottomNavigation(),
+    );
+  }
+
+  Widget _buildSelectedScreen() {
+    switch (_selectedTab) {
+      case 1:
+        return const NutritionScreen();
+      case 2:
+        return const HealthScreen();
+      case 3:
+        return const SettingsScreen();
+      default:
+        return SafeArea(
           bottom: false,
-          child: Column(
-            children: [
-              Expanded(
-                child: CustomScrollView(
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          _buildHeader(),
-                          const SizedBox(height: 28),
-                          _buildPlannedWorkout(),
-                          const SizedBox(height: 24),
-                          _buildConsistency(),
-                          const SizedBox(height: 24),
-                          _buildPersonalBests(),
-                          const SizedBox(height: 20),
-                        ]),
-                      ),
-                    ),
-                  ],
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 4),
+                    _buildPlannedWorkout(),
+                    const SizedBox(height: 24),
+                    buildConsistency(),
+                    const SizedBox(height: 24),
+                    buildPersonalBests(),
+                    const SizedBox(height: 20),
+                  ]),
                 ),
               ),
-              _buildBottomNavigation(),
             ],
           ),
-        ),
-      ),
-    );
+        );
+    }
   }
 
   TextStyle _headingStyle(double size) {
@@ -226,25 +217,6 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       fontWeight: FontWeight.bold,
       color: white,
       height: 1.04,
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Today's movement",
-          style: TextStyle(
-            color: Color(0xFF36B9FF),
-            fontSize: 22,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text('Fitness Dashboard', style: _headingStyle(32)),
-        const SizedBox(height: 18),
-      ],
     );
   }
 
@@ -430,7 +402,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
               name: lift['exercise'] as String? ?? 'Exercise',
               sets: (lift['sets'] as num?)?.toInt() ?? 0,
               reps: (lift['reps'] as num?)?.toInt() ?? 0,
-              recommendedWeight: (lift['recommended_weight'] as num?)?.toDouble(),
+              recommendedWeight: (lift['recommended_weight'] as num?)
+                  ?.toDouble(),
             ),
           )
           .toList();
@@ -478,8 +451,9 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
   }
 
   Widget _buildWorkoutActions() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      runSpacing: 12,
       children: [
         _buildHeaderAction(
           label: 'Programs',
@@ -497,6 +471,16 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
           icon: Icons.list_alt_rounded,
           onTap: _openProgramSurvey,
         ),
+        _buildHeaderAction(
+          label: 'Workout log',
+          icon: Icons.history_rounded,
+          onTap: _openWorkoutHistory,
+        ),
+        _buildHeaderAction(
+          label: 'Weight',
+          icon: Icons.monitor_weight_outlined,
+          onTap: _openBodyWeight,
+        ),
       ],
     );
   }
@@ -510,11 +494,20 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     await Future.wait([_loadProgram(), _loadWeek()]);
   }
 
-  Widget _buildConsistency() {
+  Future<void> _openWorkoutHistory() async {
+    await _openPage(const WorkoutHistoryScreen());
+    await _loadWeek();
+  }
+
+  Future<void> _openBodyWeight() async {
+    await _openPage(const BodyWeightScreen());
+  }
+
+  Widget buildConsistency() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Consistency', 30),
+        buildSectionTitle('Consistency', 30),
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
@@ -660,7 +653,9 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
             body = Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Text(
-                error is ApiException ? error.message : 'Could not load that workout.',
+                error is ApiException
+                    ? error.message
+                    : 'Could not load that workout.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.black54, fontSize: 14),
               ),
@@ -699,7 +694,10 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+            ),
           ],
         ),
       );
@@ -726,7 +724,10 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         const SizedBox(height: 20),
         Row(
           children: [
-            stat('Exercises', '${(workout['number_exercises'] as num?)?.toInt() ?? 0}'),
+            stat(
+              'Exercises',
+              '${(workout['number_exercises'] as num?)?.toInt() ?? 0}',
+            ),
             stat('Sets', '${(workout['number_sets'] as num?)?.toInt() ?? 0}'),
             stat('Volume', '${_formatWeight(workout['total_volume'])} lb'),
           ],
@@ -762,7 +763,10 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
                       // best_exercise is a single set now, so no "sets ×"
                       '${(best['reps'] as num?)?.toInt() ?? 0} reps @ '
                       '${_formatWeight(best['weight'])} lb',
-                      style: const TextStyle(color: Colors.black87, fontSize: 15),
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 15,
+                      ),
                     ),
                   ],
                 ),
@@ -771,7 +775,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-  Widget _buildPersonalBests() {
+  Widget buildPersonalBests() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 22),
@@ -782,7 +786,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Personal Bests', 29, color: navy),
+          buildSectionTitle('Personal Bests', 29, color: navy),
           const SizedBox(height: 4),
           const Text(
             'Your newest records',
@@ -881,7 +885,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
         : weight.toString();
   }
 
-  Widget _buildSectionTitle(String title, double size, {Color color = white}) {
+  Widget buildSectionTitle(String title, double size, {Color color = white}) {
     return Text(
       title,
       style: TextStyle(
@@ -894,7 +898,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
     );
   }
 
-  Widget _buildBottomNavigation() {
+  Widget buildBottomNavigation() {
     const labels = ['Fitness', 'Nutrition', 'Health', 'Settings'];
 
     const icons = [
@@ -904,65 +908,64 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen> {
       Icons.settings_outlined,
     ];
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF052858),
-        border: Border(top: BorderSide(color: Color(0xFF104783), width: 1.5)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        10,
-        12,
-        10,
-        12 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Row(
-        children: List.generate(4, (index) {
-          final selected = _selectedTab == index;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return SizedBox(
+      height: 82 + bottomInset,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF052858),
+          border: Border(top: BorderSide(color: Color(0xFF104783), width: 1.5)),
+        ),
+        padding: EdgeInsets.fromLTRB(10, 12, 10, 12 + bottomInset),
+        child: Row(
+          children: List.generate(4, (index) {
+            final selected = _selectedTab == index;
 
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: InkWell(
-                onTap: () => _selectTab(index),
-                borderRadius: BorderRadius.circular(28),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  constraints: const BoxConstraints(minHeight: 58),
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: selected ? blue : lightBlue,
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: Container(
-                    alignment: Alignment.center,
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: InkWell(
+                  onTap: () => _selectTab(index),
+                  borderRadius: BorderRadius.circular(28),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 58,
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: lightBlue,
-                      borderRadius: BorderRadius.circular(22),
+                      color: selected ? blue : lightBlue,
+                      borderRadius: BorderRadius.circular(28),
                     ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(icons[index], size: 16, color: navy),
-                          const SizedBox(width: 4),
-                          Text(
-                            labels[index],
-                            style: const TextStyle(
-                              color: navy,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: lightBlue,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(icons[index], size: 16, color: navy),
+                            const SizedBox(width: 4),
+                            Text(
+                              labels[index],
+                              style: const TextStyle(
+                                color: navy,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

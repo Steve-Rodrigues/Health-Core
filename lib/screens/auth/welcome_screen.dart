@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'fitness_dashboard_screen.dart';
+import '../fitness/fitness_screen.dart';
 import 'login_screen.dart';
 import 'registration_screen.dart';
 
@@ -149,7 +149,7 @@ class WelcomeScreen extends StatelessWidget {
                     onPressed: () => Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const FitnessDashboardScreen(),
+                        builder: (_) => const FitnessScreen(),
                       ),
                       (_) => false,
                     ),

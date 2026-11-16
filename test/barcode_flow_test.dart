@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:healthcore/screens/barcode_flow_screens.dart';
+import 'package:healthcore/screens/nutrition/barcode_flow_screens.dart';
 
 // Oreo-like food: 34 g serving, values per 100 g.
 const food = {
@@ -23,8 +23,12 @@ void main() {
     expect(formatAmount(12.0), '12');
   });
 
-  testWidgets('log screen previews macros and updates with servings', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: BarcodeLogScreen(food: food)));
+  testWidgets('log screen previews macros and updates with servings', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: BarcodeLogScreen(food: food)),
+    );
 
     // 1 serving = 34 g -> 163.2 kcal, 1.7 protein, 23.8 carbs, 6.8 fat
     expect(find.text('1 serving = 34 g'), findsOneWidget);
@@ -44,29 +48,37 @@ void main() {
     // invalid servings -> button disabled
     await tester.enterText(find.byType(TextField).first, '0');
     await tester.pump();
-    final button = tester.widget<ButtonStyleButton>(find.byType(FilledButton));
-    expect(button.onPressed, isNull);
+    expect(find.text('Enter a number more than 0'), findsOneWidget);
+    expect(find.text('—'), findsNWidgets(5));
   });
 
-  testWidgets('manual entry pre-fills per-serving values from per-100 g data', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: BarcodeManualEntryScreen(food: {
-        'barcode': '0000000000001',
-        'name': null,
-        'serving_size_grams': 34,
-        'calories_per_100': 480,
-        'protein_per_100': null,
-        'carbs_per_100': 70,
-        'fat_per_100': 20,
-        'missing': ['name', 'protein_per_100'],
-      }),
-    ));
+  testWidgets('manual entry pre-fills per-serving values from per-100 g data', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BarcodeManualEntryScreen(
+          food: {
+            'barcode': '0000000000001',
+            'name': null,
+            'serving_size_grams': 34,
+            'calories_per_100': 480,
+            'protein_per_100': null,
+            'carbs_per_100': 70,
+            'fat_per_100': 20,
+            'missing': ['name', 'protein_per_100'],
+          },
+        ),
+      ),
+    );
 
     String fieldText(String label) => tester
-        .widget<EditableText>(find.descendant(
-          of: find.widgetWithText(TextFormField, label),
-          matching: find.byType(EditableText),
-        ))
+        .widget<EditableText>(
+          find.descendant(
+            of: find.widgetWithText(TextFormField, label),
+            matching: find.byType(EditableText),
+          ),
+        )
         .controller
         .text;
 
@@ -76,6 +88,9 @@ void main() {
     expect(fieldText('Protein'), ''); // missing -> blank for the user to fill
     expect(fieldText('Carbs'), '23.8');
     expect(fieldText('Fat'), '6.8');
-    expect(find.textContaining('Some info for this product is missing'), findsOneWidget);
+    expect(
+      find.textContaining('Some info for this product is missing'),
+      findsOneWidget,
+    );
   });
 }

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../config/supabase_config.dart';
-import '../services/api.dart';
-import 'fitness_survey_screen.dart';
+import '../../config/supabase_config.dart';
+import '../../services/api.dart';
+import '../fitness/fitness_survey_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});

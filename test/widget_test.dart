@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthcore/main.dart';
-import 'package:healthcore/screens/login_screen.dart';
-import 'package:healthcore/screens/registration_screen.dart';
-import 'package:healthcore/screens/welcome_screen.dart';
+import 'package:healthcore/screens/auth/login_screen.dart';
+import 'package:healthcore/screens/auth/registration_screen.dart';
+import 'package:healthcore/screens/auth/welcome_screen.dart';
 
 void main() {
   testWidgets('starts at the welcome screen when auth is not configured', (

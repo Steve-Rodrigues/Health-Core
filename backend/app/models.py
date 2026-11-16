@@ -27,6 +27,7 @@ class User(Base):
     meals: Mapped[list["Meal"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     nutrition_goal: Mapped["User_Goal_Nutrition"] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
     sleeps: Mapped[list["Sleep"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
+    body_weights: Mapped[list["Body_Weight"]] = relationship(back_populates='user', cascade='all, delete-orphan', passive_deletes=True)
 
 #********* Lifting Section Tables ****************
 
@@ -121,6 +122,25 @@ class User_Program(Base):
     days_available: Mapped[int] = mapped_column(Integer(), nullable=False) #1-6 for days available to workout
     program: Mapped["Program"] = relationship(back_populates='user_programs') #access to the program
     user: Mapped["User"] = relationship(back_populates='user_programs') #access to the user
+
+class Program_Exercise_Override(Base):
+    __tablename__ = "program_exercise_overrides"
+    __table_args__ = (UniqueConstraint('user_program_id', 'day', 'order'),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_program_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('user_programs.id', ondelete='CASCADE'))
+    exercise_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('exercises.id', ondelete='RESTRICT'))
+    day: Mapped[int] = mapped_column(Integer(), nullable=False)
+    order: Mapped[int] = mapped_column(Integer(), nullable=False)
+
+class Body_Weight(Base):
+    __tablename__ = "body_weights"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
+    weight: Mapped[float] = mapped_column(Float(), nullable=False)
+    logged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user: Mapped["User"] = relationship(back_populates='body_weights')
 #*********** Nutrition Section *****************
 
 #stores the cache of each barcode we have seen from the api with the nutritional values attached to it 
@@ -210,6 +230,4 @@ class First_Aid(Base):
     category: Mapped[str] = mapped_column(String(), nullable=False)
     summary: Mapped[str] = mapped_column(String())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
 

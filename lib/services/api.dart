@@ -262,6 +262,56 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  Future<List<Map<String, dynamic>>> getWorkoutHistory() async {
+    final response = await _request(
+      () => _client.get(Uri.parse('$_baseUrl/lifting/history'), headers: _headers()),
+      action: 'loading workout history',
+    );
+    final body = jsonDecode(response.body);
+    _ensureSuccess(response);
+    if (body is! List) throw const ApiException(502, 'The backend returned an invalid workout history.');
+    return body.whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getBodyWeights() async {
+    final response = await _request(
+      () => _client.get(Uri.parse('$_baseUrl/body-weight'), headers: _headers()),
+      action: 'loading body weight',
+    );
+    final body = jsonDecode(response.body);
+    _ensureSuccess(response);
+    if (body is! List) throw const ApiException(502, 'The backend returned an invalid weight history.');
+    return body.whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<void> logBodyWeight(double weight) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/body-weight'),
+        headers: _headers(),
+        body: jsonEncode({'weight': weight}),
+      ),
+      action: 'saving your body weight',
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> swapExercise({
+    required int day,
+    required int order,
+    required String exerciseId,
+  }) async {
+    final response = await _request(
+      () => _client.post(
+        Uri.parse('$_baseUrl/lifting/swap-exercise'),
+        headers: _headers(),
+        body: jsonEncode({'day': day, 'order': order, 'exercise_id': exerciseId}),
+      ),
+      action: 'swapping that exercise',
+    );
+    _ensureSuccess(response);
+  }
+
   Future<Map<String, dynamic>> getNutritionSummary(DateTime day) async {
     final response = await _request(
       () => _client.get(

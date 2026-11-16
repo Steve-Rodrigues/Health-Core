@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/api.dart';
+import '../../services/api.dart';
 
 class FitnessSurveyScreen extends StatefulWidget {
   const FitnessSurveyScreen({super.key});

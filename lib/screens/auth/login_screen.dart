@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../config/supabase_config.dart';
-import '../services/api.dart';
-import 'fitness_dashboard_screen.dart';
+import '../../config/supabase_config.dart';
+import '../../services/api.dart';
+import '../fitness/fitness_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const FitnessDashboardScreen()),
+      MaterialPageRoute(builder: (_) => const FitnessScreen()),
       (_) => false,
     );
   }

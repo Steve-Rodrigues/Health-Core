@@ -303,6 +303,8 @@ class Most_Common_Meals(BaseModel):
 
 #format to hold each exercise
 class Exercise_List(BaseModel):
+    exercise_id: UUID
+    order: int
     name: str
     sets: int
     reps: int
@@ -338,3 +340,25 @@ class Personal_Record_In(BaseModel):
 class Finish_Workout_In(BaseModel):
     local_date: date
 
+class Body_Weight_In(BaseModel):
+    weight: float = Field(gt=0, lt=1000)
+
+class Body_Weight_Out(BaseModel):
+    id: UUID
+    weight: float
+    logged_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class Workout_History_Out(BaseModel):
+    id: UUID
+    workout_name: str | None = None
+    day: int | None = None
+    completed_at: datetime
+    duration: float
+    total_sets: int
+    total_volume: float
+
+class Swap_Exercise_In(BaseModel):
+    day: int = Field(ge=1)
+    order: int = Field(ge=0)
+    exercise_id: UUID

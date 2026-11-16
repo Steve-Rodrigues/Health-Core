@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/fitness_profile_service.dart';
+import '../../services/fitness_profile_service.dart';
 
 class FitnessGoalsScreen extends StatefulWidget {
   const FitnessGoalsScreen({super.key});

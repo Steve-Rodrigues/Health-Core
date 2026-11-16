@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/api.dart';
+import '../../services/api.dart';
 import 'barcode_flow_screens.dart';
 
 class NutritionScreen extends StatefulWidget {
