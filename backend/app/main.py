@@ -701,13 +701,13 @@ def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = D
     num_days_program = user_program.number_of_days #this is how many days we have in our program
     for i in range(1,num_days_program+1):
         curr_day_exercises = db.execute(select(Exercise.id, Exercise.name, Program_Exercise.order, Program_Exercise.sets, Program_Exercise.reps)
-                                        .where(Program_Exercise.program_id==user_program.program_id, i == Program_Exercise.day)
+                                        .where(Program_Exercise.program_id==user_program.id, i == Program_Exercise.day)
                                         .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
                                         .order_by(Program_Exercise.order)).all()
         overrides = {
             item.order: item.exercise_id
             for item in db.scalars(select(Program_Exercise_Override).where(
-                Program_Exercise_Override.user_program_id == user_program.id,
+                Program_Exercise_Override.user_program_id == select(User_Program.id).where(User_Program.user_id == user_id).scalar_subquery(),
                 Program_Exercise_Override.day == i,
             )).all()
         }
