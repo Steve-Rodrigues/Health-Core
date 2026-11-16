@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/api.dart';
+import '../../services/api.dart';
 
 /// Lets the user log a PR they set outside the app: filter by muscle,
 /// search by name, tap an exercise, then enter weight and reps.

@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
+  static bool _initialized = false;
+
   static const url = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://googertfgiyanznyazbo.supabase.co',
@@ -11,11 +13,10 @@ class SupabaseConfig {
   );
 
   static bool get isConfigured => publishableKey.isNotEmpty;
+  static bool get isInitialized => _initialized;
 
-  static Future<void> initialize() {
-    return Supabase.initialize(
-      url: url,
-      publishableKey: publishableKey,
-    );
+  static Future<void> initialize() async {
+    await Supabase.initialize(url: url, publishableKey: publishableKey);
+    _initialized = true;
   }
 }

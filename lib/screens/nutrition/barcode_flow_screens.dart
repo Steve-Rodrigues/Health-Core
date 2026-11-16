@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../services/api.dart';
+import '../../services/api.dart';
 
 /// Barcode logging flow:
 ///   Scanner (camera or typed barcode) -> GET scan-food
@@ -13,7 +13,8 @@ const _mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 double? _toDouble(Object? value) => value is num ? value.toDouble() : null;
 
-double? _parseNumber(String text) => double.tryParse(text.trim().replaceAll(',', '.'));
+double? _parseNumber(String text) =>
+    double.tryParse(text.trim().replaceAll(',', '.'));
 
 /// Shows whole numbers without a decimal and everything else with one decimal.
 String formatAmount(num value) {
@@ -99,8 +100,13 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       final food = await _api.scanBarcode(barcode);
       if (!mounted) return;
       if (food == null) {
-        _showMessage("We couldn't find that product. Enter its info from the label.");
-        await _continueFlow({'barcode': barcode, 'missing': <String>[]}, needsManualEntry: true);
+        _showMessage(
+          "We couldn't find that product. Enter its info from the label.",
+        );
+        await _continueFlow({
+          'barcode': barcode,
+          'missing': <String>[],
+        }, needsManualEntry: true);
       } else {
         final missing = food['missing'];
         final needsManualEntry = missing is List && missing.isNotEmpty;
@@ -115,22 +121,29 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         _showMessage(
           error.message,
           actionLabel: 'Enter manually',
-          onAction: () => _whileBusy(() => _continueFlow(
-                {'barcode': barcode, 'missing': <String>[]},
-                needsManualEntry: true,
-              )),
+          onAction: () => _whileBusy(
+            () => _continueFlow({
+              'barcode': barcode,
+              'missing': <String>[],
+            }, needsManualEntry: true),
+          ),
         );
       }
     }
   });
 
   /// Runs manual entry (if needed) then the log screen. Pops the scanner if a meal was logged.
-  Future<void> _continueFlow(Map<String, dynamic> food, {required bool needsManualEntry}) async {
+  Future<void> _continueFlow(
+    Map<String, dynamic> food, {
+    required bool needsManualEntry,
+  }) async {
     var current = food;
     if (needsManualEntry) {
       final saved = await Navigator.push<Map<String, dynamic>>(
         context,
-        MaterialPageRoute(builder: (_) => BarcodeManualEntryScreen(food: current)),
+        MaterialPageRoute(
+          builder: (_) => BarcodeManualEntryScreen(food: current),
+        ),
       );
       if (saved == null || !mounted) return; // backed out -> keep scanning
       current = saved;
@@ -160,7 +173,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     } catch (_) {}
   }
 
-  void _showMessage(String message, {String? actionLabel, VoidCallback? onAction}) {
+  void _showMessage(
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -184,7 +201,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 MobileScanner(
                   controller: _scanner,
                   onDetect: _onDetect,
-                  errorBuilder: (context, error) => _CameraUnavailable(error: error),
+                  errorBuilder: (context, error) =>
+                      _CameraUnavailable(error: error),
                 ),
                 // Simple frame to show where to aim.
                 IgnorePointer(
@@ -292,7 +310,8 @@ class BarcodeManualEntryScreen extends StatefulWidget {
   final Map<String, dynamic> food;
 
   @override
-  State<BarcodeManualEntryScreen> createState() => _BarcodeManualEntryScreenState();
+  State<BarcodeManualEntryScreen> createState() =>
+      _BarcodeManualEntryScreenState();
 }
 
 class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
@@ -320,7 +339,9 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
     }
 
     _name = TextEditingController(text: food['name'] as String? ?? '');
-    _servingGrams = TextEditingController(text: serving == null ? '' : formatAmount(serving));
+    _servingGrams = TextEditingController(
+      text: serving == null ? '' : formatAmount(serving),
+    );
     _calories = TextEditingController(text: perServing('calories_per_100'));
     _protein = TextEditingController(text: perServing('protein_per_100'));
     _carbs = TextEditingController(text: perServing('carbs_per_100'));
@@ -352,7 +373,8 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final serving = _parseNumber(_servingGrams.text)!;
-    double per100(TextEditingController c) => _parseNumber(c.text)! / serving * 100;
+    double per100(TextEditingController c) =>
+        _parseNumber(c.text)! / serving * 100;
 
     setState(() => _saving = true);
     try {
@@ -369,7 +391,10 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -378,7 +403,8 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final missing = (widget.food['missing'] as List?)?.cast<String>() ?? const [];
+    final missing =
+        (widget.food['missing'] as List?)?.cast<String>() ?? const [];
     final notFound = widget.food['name'] == null && missing.isEmpty;
 
     Widget numberField(
@@ -386,20 +412,19 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
       String label, {
       String? suffix,
       String? Function(String?)? validator,
-    }) =>
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: TextFormField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: validator ?? _requireNonNegative,
-            decoration: InputDecoration(
-              labelText: label,
-              suffixText: suffix,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        );
+    }) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        validator: validator ?? _requireNonNegative,
+        decoration: InputDecoration(
+          labelText: label,
+          suffixText: suffix,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Enter food info')),
@@ -419,15 +444,21 @@ class _BarcodeManualEntryScreenState extends State<BarcodeManualEntryScreen> {
               child: TextFormField(
                 controller: _name,
                 textCapitalization: TextCapitalization.words,
-                validator: (text) =>
-                    (text == null || text.trim().isEmpty) ? 'Enter a name' : null,
+                validator: (text) => (text == null || text.trim().isEmpty)
+                    ? 'Enter a name'
+                    : null,
                 decoration: const InputDecoration(
                   labelText: 'Food name',
                   border: OutlineInputBorder(),
                 ),
               ),
             ),
-            numberField(_servingGrams, 'Serving size', suffix: 'g', validator: _requirePositive),
+            numberField(
+              _servingGrams,
+              'Serving size',
+              suffix: 'g',
+              validator: _requirePositive,
+            ),
             const SizedBox(height: 8),
             Text(
               'Per serving (as shown on the label)',
@@ -498,7 +529,8 @@ class _BarcodeLogScreenState extends State<BarcodeLogScreen> {
 
   /// grams eaten * (amount per 100 g) / 100 -- same formula as the backend's log_meal.
   double _macro(String key, double servings) {
-    final grams = (_toDouble(widget.food['serving_size_grams']) ?? 0) * servings;
+    final grams =
+        (_toDouble(widget.food['serving_size_grams']) ?? 0) * servings;
     return grams * (_toDouble(widget.food[key]) ?? 0) / 100;
   }
 
@@ -516,7 +548,10 @@ class _BarcodeLogScreenState extends State<BarcodeLogScreen> {
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -530,13 +565,13 @@ class _BarcodeLogScreenState extends State<BarcodeLogScreen> {
     final servings = _servingCount;
 
     Widget macroRow(String label, String key, String unit) => ListTile(
-          dense: true,
-          title: Text(label),
-          trailing: Text(
-            servings == null ? '—' : '${formatAmount(_macro(key, servings))} $unit',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        );
+      dense: true,
+      title: Text(label),
+      trailing: Text(
+        servings == null ? '—' : '${formatAmount(_macro(key, servings))} $unit',
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Log food')),
@@ -582,7 +617,9 @@ class _BarcodeLogScreenState extends State<BarcodeLogScreen> {
                     dense: true,
                     title: const Text('Total amount'),
                     trailing: Text(
-                      servings == null ? '—' : '${formatAmount(servingGrams * servings)} g',
+                      servings == null
+                          ? '—'
+                          : '${formatAmount(servingGrams * servings)} g',
                     ),
                   ),
                   const Divider(height: 1),

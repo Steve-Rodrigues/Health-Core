@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'program_survey_screen.dart';
-import '../services/api.dart';
+import '../../services/api.dart';
 
 /// Shows every day of the user's current program as swipeable cards,
 /// with a tab row on top to jump straight to a day.
@@ -97,6 +97,34 @@ class _ProgramOverviewScreenState extends State<ProgramOverviewScreen> {
       MaterialPageRoute(builder: (_) => const ProgramSurveyScreen()),
     );
     await _load();
+  }
+
+  Future<void> _swapExercise(Map<String, dynamic> exercise, int day) async {
+    try {
+      final options = await ApiClient().getExercises();
+      if (!mounted || options.isEmpty) return;
+      final selected = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => ListView(
+          children: options.map((option) => ListTile(
+            title: Text(option['name'] as String? ?? 'Exercise'),
+            subtitle: Text(option['primary_muscle'] as String? ?? ''),
+            onTap: () => Navigator.pop(context, option),
+          )).toList(),
+        ),
+      );
+      if (selected == null || !mounted) return;
+      await ApiClient().swapExercise(
+        day: day,
+        order: (exercise['order'] as num?)?.toInt() ?? 0,
+        exerciseId: selected['id'] as String,
+      );
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exercise swapped for your plan.')));
+    } on ApiException catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   @override
@@ -327,7 +355,7 @@ class _ProgramOverviewScreenState extends State<ProgramOverviewScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                     itemCount: exercises.length,
                     separatorBuilder: (_, _) => const Divider(height: 1, color: paleBlue),
-                    itemBuilder: (_, i) => _buildExerciseRow(i + 1, exercises[i]),
+                    itemBuilder: (_, i) => _buildExerciseRow(i + 1, dayNumber, exercises[i]),
                   ),
           ),
         ],
@@ -342,7 +370,7 @@ class _ProgramOverviewScreenState extends State<ProgramOverviewScreen> {
     );
   }
 
-  Widget _buildExerciseRow(int number, Map<String, dynamic> exercise) {
+  Widget _buildExerciseRow(int number, int day, Map<String, dynamic> exercise) {
     final sets = (exercise['sets'] as num?)?.toInt() ?? 0;
     final reps = (exercise['reps'] as num?)?.toInt() ?? 0;
     // Not sent by the backend yet; shows automatically once it is.
@@ -374,6 +402,11 @@ class _ProgramOverviewScreenState extends State<ProgramOverviewScreen> {
               '${weight % 1 == 0 ? weight.toInt() : weight} lb',
               style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
             ),
+          IconButton(
+            tooltip: 'Swap exercise',
+            icon: const Icon(Icons.swap_horiz_rounded, color: blue),
+            onPressed: () => _swapExercise(exercise, day),
+          ),
         ],
       ),
     );

@@ -1,8 +1,9 @@
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/api.dart';
+import '../../services/api.dart';
 
 const Color workoutNavy = Color(0xFF092F62);
 const Color workoutBlue = Color(0xFF125BA7);
@@ -165,6 +166,8 @@ class WorkoutSessionScreen extends StatefulWidget {
 class _WorkoutSessionScreenState
     extends State<WorkoutSessionScreen> {
   late final Stopwatch _stopwatch;
+  Timer? _timerTicker;
+  bool _isPaused = false;
 
   int _currentExerciseIndex = 0;
   final List<CompletedExercise> _completedExercises = [];
@@ -188,6 +191,9 @@ class _WorkoutSessionScreenState
     super.initState();
 
     _stopwatch = Stopwatch()..start();
+    _timerTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _setUpSetRows();
   }
 
@@ -228,6 +234,7 @@ class _WorkoutSessionScreenState
   @override
   void dispose() {
     _stopwatch.stop();
+    _timerTicker?.cancel();
     _disposeSetControllers();
     super.dispose();
   }
@@ -577,16 +584,26 @@ class _WorkoutSessionScreenState
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Text(
-              'Exercise $exerciseNumber of $totalExercises',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+            Row(children: [
+              Text(_formatElapsed(_stopwatch.elapsed), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+              IconButton(
+                tooltip: _isPaused ? 'Resume timer' : 'Pause timer',
+                onPressed: () {
+                  setState(() {
+                    _isPaused = !_isPaused;
+                    if (_isPaused) {
+                      _stopwatch.stop();
+                    } else {
+                      _stopwatch.start();
+                    }
+                  });
+                },
+                icon: Icon(_isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white),
               ),
-            ),
+            ]),
           ],
         ),
+        Text('Exercise $exerciseNumber of $totalExercises', style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 14),
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
@@ -606,6 +623,13 @@ class _WorkoutSessionScreenState
         ),
       ],
     );
+  }
+
+  String _formatElapsed(Duration elapsed) {
+    final hours = elapsed.inHours;
+    final minutes = elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:$seconds';
   }
 
   Widget _buildExerciseCard() {

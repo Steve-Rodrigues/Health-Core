@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
-import 'screens/fitness_dashboard_screen.dart';
-import 'screens/welcome_screen.dart';
+import 'screens/fitness/fitness_screen.dart';
+import 'screens/auth/welcome_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,9 +18,40 @@ class HealthCoreApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    const fitnessBlue = Color(0xFF086AC7);
+    const fitnessNavy = Color(0xFF062D63);
+    const fitnessPaleBlue = Color(0xFFE5F4FF);
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'HealthCore',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: fitnessBlue,
+          primary: fitnessBlue,
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: fitnessPaleBlue,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: fitnessNavy,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          margin: EdgeInsets.zero,
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: fitnessBlue,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(18)),
+            ),
+          ),
+        ),
+      ),
       home: AuthGate(),
     );
   }
@@ -31,7 +62,7 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!SupabaseConfig.isConfigured) {
+    if (!SupabaseConfig.isConfigured || !SupabaseConfig.isInitialized) {
       return const WelcomeScreen();
     }
 
@@ -45,7 +76,7 @@ class AuthGate extends StatelessWidget {
           return const WelcomeScreen();
         }
 
-        return const FitnessDashboardScreen();
+        return const FitnessScreen();
       },
     );
   }

@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
-from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record
+from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record, Body_Weight, Program_Exercise_Override
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
 
 
@@ -371,8 +371,21 @@ def start_workout(body: Start_Workout_In,user_id: UUID = Depends(get_curr_user),
     #getting all the exercises/sets/reps from the db for the day and program id
     all_exercises = db.execute(select(Program_Exercise,Exercise)
                                .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
-                               .where(Program_Exercise.program_id==program.id, Program_Exercise.day==user_program.current_day)).all()
+                               .where(Program_Exercise.program_id==program.id, Program_Exercise.day==user_program.current_day)
+                               .order_by(Program_Exercise.order)).all()
+    overrides = {
+        item.order: item.exercise_id
+        for item in db.scalars(select(Program_Exercise_Override).where(
+            Program_Exercise_Override.user_program_id == user_program.id,
+            Program_Exercise_Override.day == user_program.current_day,
+        )).all()
+    }
     for program_exercise, exercise in all_exercises:
+        override_id = overrides.get(program_exercise.order)
+        if override_id is not None:
+            exercise = db.scalar(select(Exercise).where(Exercise.id == override_id))
+            if exercise is None:
+                raise HTTPException(500, 'A saved exercise replacement is no longer available')
         curr_exercise = {} #build this and append to lift_data each time-- stores {exercise, exercise_id, sets, reps}
         curr_exercise['exercise'], curr_exercise['exercise_id'], curr_exercise['sets'], curr_exercise['reps'] = exercise.name,exercise.id,program_exercise.sets,program_exercise.reps
         #get the last weight the user used for this exercise so we can give them a recommendation
@@ -568,6 +581,77 @@ def get_newest_records(user_id: UUID = Depends(get_curr_user), db: Session= Depe
         newest_records['records'].append({'lift_name':pr.name,'weight':pr.weight,'reps':pr.reps})
     return newest_records
 
+@app.get('/lifting/history', response_model=list[Workout_History_Out])
+def get_workout_history(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    workouts = db.execute(
+        select(Workout, Program.name)
+        .outerjoin(Program, Workout.program_id == Program.id)
+        .where(Workout.user_id == user_id, Workout.completed_at.is_not(None))
+        .order_by(Workout.completed_at.desc())
+        .limit(50)
+    ).all()
+    result = []
+    for workout, name in workouts:
+        sets = db.scalars(select(Workout_Set).where(Workout_Set.workout_id == workout.id, Workout_Set.sets == 1)).all()
+        result.append({
+            'id': workout.id,
+            'workout_name': name,
+            'day': workout.day,
+            'completed_at': workout.completed_at,
+            'duration': round((workout.completed_at - workout.started_at).total_seconds() / 60, 1),
+            'total_sets': len(sets),
+            'total_volume': sum(item.reps * item.weight for item in sets),
+        })
+    return result
+
+@app.post('/body-weight', response_model=Body_Weight_Out, status_code=status.HTTP_201_CREATED)
+def log_body_weight(body: Body_Weight_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    entry = Body_Weight(user_id=user_id, weight=body.weight)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    user = db.scalar(select(User).where(User.id == user_id))
+    if user is not None:
+        user.current_weight = body.weight
+        db.commit()
+    return entry
+
+@app.get('/body-weight', response_model=list[Body_Weight_Out])
+def get_body_weights(user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    return db.scalars(
+        select(Body_Weight).where(Body_Weight.user_id == user_id)
+        .order_by(Body_Weight.logged_at.desc()).limit(100)
+    ).all()
+
+@app.post('/lifting/swap-exercise', status_code=status.HTTP_201_CREATED)
+def swap_exercise(body: Swap_Exercise_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    user_program = db.scalar(select(User_Program).where(User_Program.user_id == user_id))
+    if user_program is None:
+        raise HTTPException(404, 'No active program')
+    planned = db.scalar(select(Program_Exercise).where(
+        Program_Exercise.program_id == user_program.program_id,
+        Program_Exercise.day == body.day,
+        Program_Exercise.order == body.order,
+    ))
+    replacement = db.scalar(select(Exercise).where(Exercise.id == body.exercise_id))
+    if planned is None or replacement is None:
+        raise HTTPException(404, 'Exercise or program position not found')
+    override = db.scalar(select(Program_Exercise_Override).where(
+        Program_Exercise_Override.user_program_id == user_program.id,
+        Program_Exercise_Override.day == body.day,
+        Program_Exercise_Override.order == body.order,
+    ))
+    if override is None:
+        override = Program_Exercise_Override(
+            user_program_id=user_program.id, day=body.day, order=body.order,
+            exercise_id=body.exercise_id,
+        )
+        db.add(override)
+    else:
+        override.exercise_id = body.exercise_id
+    db.commit()
+    return {'status': 'success'}
+
 #endpoint to get a workout completed in the past week from the lifting dashboard
 @app.get('/lifting/get-workout/{workout_id}', response_model=Week_Workout_Out)
 def get_workout_from_current_week(workout_id:UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
@@ -616,9 +700,17 @@ def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = D
     program_summary = {'goal':user_program.goal,'name':user_program.name,'description':user_program.description,'days':[]} #this is what we will return at the end
     num_days_program = user_program.number_of_days #this is how many days we have in our program
     for i in range(1,num_days_program+1):
-        curr_day_exercises = db.execute(select(Exercise.name,Program_Exercise.sets,Program_Exercise.reps)
-                                        .where(Program_Exercise.program_id==user_program.id, i == Program_Exercise.day)
-                                        .join(Exercise, Program_Exercise.exercise_id==Exercise.id)).all()
+        curr_day_exercises = db.execute(select(Exercise.id, Exercise.name, Program_Exercise.order, Program_Exercise.sets, Program_Exercise.reps)
+                                        .where(Program_Exercise.program_id==user_program.program_id, i == Program_Exercise.day)
+                                        .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
+                                        .order_by(Program_Exercise.order)).all()
+        overrides = {
+            item.order: item.exercise_id
+            for item in db.scalars(select(Program_Exercise_Override).where(
+                Program_Exercise_Override.user_program_id == user_program.id,
+                Program_Exercise_Override.day == i,
+            )).all()
+        }
         #each day is an obj that we append to the days key
         program_day={'day':i, 'number_exercises': None, 'number_sets':None, 'exercises':[]} #exercises is an array of objects-- one for each exercise for that day
 
@@ -626,7 +718,9 @@ def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = D
         num_sets = 0 #update after each iteration
 
         for exercise in curr_day_exercises:
-            current_exercise = {'name':exercise.name, 'sets':exercise.sets,'reps':exercise.reps} #each exercise appended to exercises key
+            exercise_id = overrides.get(exercise.order, exercise.id)
+            exercise_name = db.scalar(select(Exercise.name).where(Exercise.id == exercise_id))
+            current_exercise = {'exercise_id': exercise_id, 'order': exercise.order, 'name': exercise_name, 'sets':exercise.sets,'reps':exercise.reps}
             num_sets += exercise.sets #updates for each exercise
             #append to the program_day exercise array
             program_day['exercises'].append(current_exercise)
@@ -674,6 +768,3 @@ def set_personal_record(body:Personal_Record_In, user_id: UUID = Depends(get_cur
                 db.rollback()
                 raise HTTPException(500, 'Could not update the record')
     return {'new_pr': False}
-
-
-
