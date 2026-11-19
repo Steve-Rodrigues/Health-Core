@@ -31,18 +31,18 @@ def test():
 
 #************************ Signup / Login / Onboarding *****************************
 
-#signup route-- creates a User in the DB with id from jwt and username they entered in the form
+#signup route-- creates a User in the DB with id from jwt and the email they signed up with
 @app.post('/users/signup', response_model=User_Signup_Out, status_code=status.HTTP_201_CREATED)
 def signup(body: User_Signup_In, db: Session = Depends(get_db), user_id: UUID = Depends(get_curr_user)):
     if db.scalars(select(User).where(User.id == user_id)).first():
         raise HTTPException(status_code = status.HTTP_409_CONFLICT, detail="User already exists in the database")
-    user = User(id=user_id, username=body.username) #creating user obj
+    user = User(id=user_id, email=body.email) #creating user obj
     db.add(user)
     try:
         db.commit()
     except IntegrityError:
         db.rollback() #sets the Session back for next db connection
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username is already in use") #db rejects the username b/c not unique
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use") #db rejects the email b/c not unique
     db.refresh(user) #get finalized user to return
     return user
 #login route-- returns the user info if its in the db so frontend can move to dashboard
@@ -701,13 +701,13 @@ def get_each_program_day(user_id: UUID = Depends(get_curr_user), db: Session = D
     num_days_program = user_program.number_of_days #this is how many days we have in our program
     for i in range(1,num_days_program+1):
         curr_day_exercises = db.execute(select(Exercise.id, Exercise.name, Program_Exercise.order, Program_Exercise.sets, Program_Exercise.reps)
-                                        .where(Program_Exercise.program_id==user_program.program_id, i == Program_Exercise.day)
+                                        .where(Program_Exercise.program_id==user_program.id, i == Program_Exercise.day)
                                         .join(Exercise, Program_Exercise.exercise_id==Exercise.id)
                                         .order_by(Program_Exercise.order)).all()
         overrides = {
             item.order: item.exercise_id
             for item in db.scalars(select(Program_Exercise_Override).where(
-                Program_Exercise_Override.user_program_id == user_program.id,
+                Program_Exercise_Override.user_program_id == select(User_Program.id).where(User_Program.user_id == user_id).scalar_subquery(),
                 Program_Exercise_Override.day == i,
             )).all()
         }

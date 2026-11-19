@@ -255,6 +255,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                       ),
                       const SizedBox(width: 10),
                       FilledButton(
+                        // The app theme makes FilledButtons full-width, which breaks inside a Row.
+                        style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
                         onPressed: _busy ? null : _submitTyped,
                         child: const Text('Look up'),
                       ),

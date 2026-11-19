@@ -43,7 +43,9 @@ class ApiClient {
       () => _client.post(
         Uri.parse('$_baseUrl/users/signup'),
         headers: _headers(),
-        body: jsonEncode({'username': _usernameForCurrentUser()}),
+        body: jsonEncode({
+          'email': Supabase.instance.client.auth.currentUser?.email ?? '',
+        }),
       ),
       action: 'creating your account',
     );
@@ -53,20 +55,6 @@ class ApiClient {
         (response.statusCode < 200 || response.statusCode >= 300)) {
       throw ApiException(response.statusCode, _errorMessage(response));
     }
-  }
-
-  String _usernameForCurrentUser() {
-    final user = Supabase.instance.client.auth.currentUser;
-    final metadataName = user?.userMetadata?['username'];
-    if (metadataName is String && metadataName.trim().length >= 3) {
-      return metadataName.trim();
-    }
-
-    // Fall back to the email prefix for users created outside the app.
-    var name = (user?.email ?? 'user').split('@').first;
-    name = name.replaceAll(RegExp(r'[^A-Za-z0-9_.]'), '');
-    if (name.length < 3) name = name.padRight(3, '0');
-    return name.length > 20 ? name.substring(0, 20) : name;
   }
 
   Future<void> saveFitnessProfile(Map<String, dynamic> fitnessProfile) async {

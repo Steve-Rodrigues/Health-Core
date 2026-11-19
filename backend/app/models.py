@@ -14,7 +14,7 @@ Base = declarative_base() #creates the Base call to put in the table class param
 class User(Base):
     __tablename__ = 'users'
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True) #id is set to the one from supabase
-    username: Mapped[str] = mapped_column(String(30), unique=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     current_weight: Mapped[float] = mapped_column(Float(), nullable=True)
     height: Mapped[float] = mapped_column(Float(), nullable=True)
