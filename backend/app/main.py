@@ -31,18 +31,18 @@ def test():
 
 #************************ Signup / Login / Onboarding *****************************
 
-#signup route-- creates a User in the DB with id from jwt and username they entered in the form
+#signup route-- creates a User in the DB with id from jwt and the email they signed up with
 @app.post('/users/signup', response_model=User_Signup_Out, status_code=status.HTTP_201_CREATED)
 def signup(body: User_Signup_In, db: Session = Depends(get_db), user_id: UUID = Depends(get_curr_user)):
     if db.scalars(select(User).where(User.id == user_id)).first():
         raise HTTPException(status_code = status.HTTP_409_CONFLICT, detail="User already exists in the database")
-    user = User(id=user_id, username=body.username) #creating user obj
+    user = User(id=user_id, email=body.email) #creating user obj
     db.add(user)
     try:
         db.commit()
     except IntegrityError:
         db.rollback() #sets the Session back for next db connection
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username is already in use") #db rejects the username b/c not unique
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use") #db rejects the email b/c not unique
     db.refresh(user) #get finalized user to return
     return user
 #login route-- returns the user info if its in the db so frontend can move to dashboard

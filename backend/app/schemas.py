@@ -4,20 +4,20 @@ from uuid import UUID
 import uuid
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal #values in the Literal array must be only what we set
-#on signup the backend is only expecting the client to send over the username because we get the id from the dependency
+#on signup the backend is only expecting the client to send over the email because we get the id from the dependency
 class User_Signup_In(BaseModel):
-    username: str = Field(min_length=3, max_length=20)
+    email: str = Field(min_length=3, max_length=254)
 #format we return the user signup to the client 
 class User_Signup_Out(BaseModel):
     id: UUID
-    username: str
+    email: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 #format we return user data in after login
 class User_Login_Out(BaseModel):
-    username: str
+    email: str
     created_at: datetime
     height: float | None = None
     current_weight: float | None = None
