@@ -50,11 +50,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          const SizedBox(height: 12),
           Card(
             elevation: 0,
             color: Colors.white,
             child: ListTile(
-              leading: const Icon(Icons.emoji_events_outlined, color: Color(0xFF062D63)),
+              leading: const Icon(
+                Icons.palette_outlined,
+                color: Color(0xFF062D63),
+              ),
+              title: const Text('Theme'),
+              subtitle: const Text('View the app theme'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                // Implement theme functionality here
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(
+                Icons.manage_accounts_outlined,
+                color: Color(0xFF062D63),
+              ),
+              title: const Text('Account Settings'),
+              subtitle: const Text('View your account information'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                // Implement account settings functionality here
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(
+                Icons.delete_sweep_outlined,
+                color: Color(0xFF062D63),
+              ),
+              title: const Text('Clear Data'),
+              subtitle: const Text('Remove locally stored app data'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                // Implement clear data functionality here
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(
+                Icons.emoji_events_outlined,
+                color: Color(0xFF062D63),
+              ),
               title: const Text('Personal Records'),
               subtitle: const Text('Log a PR you set outside the app'),
               trailing: const Icon(Icons.chevron_right),
