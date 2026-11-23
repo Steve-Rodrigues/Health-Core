@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../fitness/log_pr_screen.dart';
 import '../auth/welcome_screen.dart';
+import '../settings/account_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+//************************************************************************************/
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSigningOut = false;
 
@@ -37,6 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+//************************************************************************************/
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -80,7 +83,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: const Text('View your account information'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                // Implement account settings functionality here
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+                );
               },
             ),
           ),
