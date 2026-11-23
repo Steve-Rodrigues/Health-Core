@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out, Send_Workouts_Welcome_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out, Send_Workouts_Welcome_Out, Send_Sleep_Welcome_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record, Body_Weight, Program_Exercise_Override
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -334,6 +334,18 @@ def log_sleep(body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Se
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not create sleep record")
     db.refresh(sleep_log)
     return sleep_log
+#endpoint for returning the amount of sleep in mins the user logged for the past 7 days 
+#takes in a query parameter for the current date
+@app.get('/welcome/sleep', response_model=Send_Sleep_Welcome_Out)
+def get_sleep_stats(current_date: date, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    seven_days_ago = current_date - timedelta(days=7) #7 days ago for the filtering for sleep data
+    summary = {'sleep_history': []} #holds the results-- up to 7 days of sleep
+    sleeps = db.scalars(select(Sleep)
+                        .where(Sleep.user_id==user_id, Sleep.sleep_date > seven_days_ago, Sleep.sleep_date<=current_date)
+                        .order_by(Sleep.sleep_date.asc())).all()
+    for sleep in sleeps:
+        summary['sleep_history'].append({'sleep_date':sleep.sleep_date, 'duration_hours': round(sleep.duration_mins/60,1)})
+    return summary
 
 #*********************************** Lifting Section ***************************************
 

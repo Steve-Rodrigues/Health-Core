@@ -385,3 +385,11 @@ class Workouts_Main_Screen(BaseModel):
 
 class Send_Workouts_Welcome_Out(BaseModel):
     workouts: list[Workouts_Main_Screen] = []
+    model_config = ConfigDict(from_attributes=True)
+
+#format to send the sleep date from the last 7 days-- it will have an array of objects which hold the duration in mins for each of the nights
+class Sleep_Array_Main(BaseModel):
+    sleep_date: date
+    duration_hours: float
+class Send_Sleep_Welcome_Out(BaseModel):
+    sleep_history: list[Sleep_Array_Main] = []
