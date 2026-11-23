@@ -377,3 +377,11 @@ class Meal_List(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 class Search_Meal_Out(BaseModel):
     meals: list[Meal_List] = []
+
+#format for sending the heatmap workouts completed by the user-- its an array of objects
+class Workouts_Main_Screen(BaseModel):
+    started_at: datetime
+    completed_at: datetime
+
+class Send_Workouts_Welcome_Out(BaseModel):
+    workouts: list[Workouts_Main_Screen] = []

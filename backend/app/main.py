@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out, Send_Workouts_Welcome_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record, Body_Weight, Program_Exercise_Override
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -792,3 +792,16 @@ def set_personal_record(body:Personal_Record_In, user_id: UUID = Depends(get_cur
                 db.rollback()
                 raise HTTPException(500, 'Could not update the record')
     return {'new_pr': False}
+
+#endpoint to send the workouts completed from the last 70 days (10 weeks) so we can display the heat map on the welcome screen
+#it takes a start date query parameter and gets all workouts past or equal to that day (should be 70 days before the current day)
+@app.get('/welcome/lifting', response_model=Send_Workouts_Welcome_Out)
+def get_heat_map_workouts(start_date: datetime,user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    if start_date.tzinfo is None: raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail='Could not process, needs a timezone to filter on')
+    workouts = db.scalars(select(Workout)
+                          .where(Workout.user_id == user_id, Workout.completed_at.is_not(None), start_date <= Workout.started_at)
+                          .order_by(Workout.started_at.desc())).all()
+    summary = {'workouts': []} #going to be what we return
+    for workout in workouts:
+        summary['workouts'].append({'started_at':workout.started_at, 'completed_at': workout.completed_at})
+    return summary
