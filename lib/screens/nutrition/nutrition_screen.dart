@@ -151,18 +151,66 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   Widget _buildCommonMealCard(Map<String, dynamic> meal) {
     String amount(String key) => formatAmount(meal[key] as num? ?? 0);
+    final textTheme = Theme.of(context).textTheme;
     return Card(
-      child: ListTile(
-        title: Text(meal['meal_name']?.toString() ?? ''),
-        subtitle: Text(
-          'P ${amount('protein')}g · C ${amount('carbs')}g · F ${amount('fat')}g',
-        ),
-        trailing: Text(
-          '${amount('calories')} kcal',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    meal['meal_name']?.toString() ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    '${amount('calories')} kcal · P ${amount('protein')}g · '
+                    'C ${amount('carbs')}g · F ${amount('fat')}g',
+                    style: textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Log this meal',
+              icon: const Icon(Icons.add_circle),
+              onSelected: (type) => _logCommonMeal(meal, type),
+              itemBuilder: (_) => [
+                for (final type in ['breakfast', 'lunch', 'dinner', 'snack'])
+                  PopupMenuItem(value: type, child: Text('Log as $type')),
+              ],
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  /// Re-logs one of the user's usual meals with the chosen meal type.
+  Future<void> _logCommonMeal(Map<String, dynamic> meal, String mealType) async {
+    int macro(String key) => (meal[key] as num? ?? 0).round();
+    try {
+      await _api.createMeal(
+        mealName: meal['meal_name']?.toString() ?? '',
+        mealType: mealType,
+        calories: macro('calories'),
+        protein: macro('protein'),
+        carbs: macro('carbs'),
+        fat: macro('fat'),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${meal['meal_name']} logged')),
+      );
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) _message(error.message);
+    }
   }
 
   void _message(String message) {
