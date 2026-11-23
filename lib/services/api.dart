@@ -324,6 +324,20 @@ class ApiClient {
     return meals.cast<Map<String, dynamic>>();
   }
 
+  /// Past meals whose name contains [query], newest first, deduped by name.
+  Future<List<Map<String, dynamic>>> searchMeals(String query) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/nutrition/search-meal')
+            .replace(queryParameters: {'meal_name': query}),
+        headers: _headers(),
+      ),
+      action: 'searching your meals',
+    );
+    final meals = _jsonMap(response)['meals'] as List? ?? [];
+    return meals.cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, dynamic>> createMeal({
     required String mealName,
     required String mealType,

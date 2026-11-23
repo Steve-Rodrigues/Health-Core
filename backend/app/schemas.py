@@ -362,3 +362,18 @@ class Swap_Exercise_In(BaseModel):
     day: int = Field(ge=1)
     order: int = Field(ge=0)
     exercise_id: UUID
+
+#format to get take in the letters for the search of the meal name
+class Search_Meal_In(BaseModel):
+    meal_name: str
+#format to send it out-- it sends a list of the possible matches (each db Meal that matches the name)
+class Meal_List(BaseModel):
+    meal_name: str
+    meal_type: str
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    model_config = ConfigDict(from_attributes=True)
+class Search_Meal_Out(BaseModel):
+    meals: list[Meal_List] = []

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../services/api.dart';
@@ -241,6 +243,16 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   }
 
+  /// Opens the past-meal search; logs the picked meal with the picked type.
+  Future<void> _searchMeals() async {
+    final picked = await showDialog<(Map<String, dynamic>, String)>(
+      context: context,
+      builder: (context) => const _MealSearchDialog(),
+    );
+    if (picked == null) return;
+    await _logCommonMeal(picked.$1, picked.$2);
+  }
+
   Future<void> _scanBarcode() async {
     final logged = await Navigator.push<bool>(
       context,
@@ -300,26 +312,52 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                 children: [
                   Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Text(
-                            '${(_summary?['macro_score'] as num?)?.toStringAsFixed(1) ?? '—'}%',
-                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                    child: Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              Text(
+                                '${(_summary?['macro_score'] as num?)?.toStringAsFixed(1) ?? '—'}%',
+                                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                              ),
+                              const Text('Daily macro score'),
+                              const SizedBox(height: 18),
+                              for (final macro in ['calories', 'protein', 'carbs', 'fat'])
+                                ListTile(
+                                  title: Text(macro[0].toUpperCase() + macro.substring(1)),
+                                  trailing: Text(
+                                    formatAmount(consumed[macro] as num? ?? 0) +
+                                        (goals == null ? '' : ' / ${goals[macro] ?? 0}'),
+                                  ),
+                                ),
+                            ],
                           ),
-                          const Text('Daily macro score'),
-                          const SizedBox(height: 18),
-                          for (final macro in ['calories', 'protein', 'carbs', 'fat'])
-                            ListTile(
-                              title: Text(macro[0].toUpperCase() + macro.substring(1)),
-                              trailing: Text(
-                                formatAmount(consumed[macro] as num? ?? 0) +
-                                    (goals == null ? '' : ' / ${goals[macro] ?? 0}'),
+                        ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Tooltip(
+                            message: 'Search past meals to log',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _searchMeals,
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.search),
+                                    SizedBox(height: 2),
+                                    Text('Quick add', style: TextStyle(fontSize: 11)),
+                                  ],
+                                ),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -415,6 +453,124 @@ class _GoalsDialogState extends State<_GoalsDialog> {
   }
 }
 
+class _MealSearchDialog extends StatefulWidget {
+  const _MealSearchDialog();
+
+  @override
+  State<_MealSearchDialog> createState() => _MealSearchDialogState();
+}
+
+class _MealSearchDialogState extends State<_MealSearchDialog> {
+  final _api = ApiClient();
+  Timer? _debounce;
+  String _query = '';
+  bool _searching = false;
+  String? _error;
+  List<Map<String, dynamic>> _results = [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onChanged(String text) {
+    _debounce?.cancel();
+    final query = text.trim();
+    setState(() {
+      _query = query;
+      _error = null;
+      if (query.isEmpty) _results = [];
+    });
+    if (query.isEmpty) return;
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(query));
+  }
+
+  Future<void> _search(String query) async {
+    setState(() => _searching = true);
+    try {
+      final meals = await _api.searchMeals(query);
+      if (mounted && query == _query) setState(() => _results = meals);
+    } on ApiException catch (error) {
+      if (mounted && query == _query) setState(() => _error = error.message);
+    } finally {
+      if (mounted && query == _query) setState(() => _searching = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    String amount(Map<String, dynamic> meal, String key) =>
+        formatAmount(meal[key] as num? ?? 0);
+
+    Widget body;
+    if (_error != null) {
+      body = Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error));
+    } else if (_query.isEmpty) {
+      body = Text('Type a meal name you\'ve logged before.', style: textTheme.bodySmall);
+    } else if (_searching && _results.isEmpty) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (_results.isEmpty) {
+      body = Text('No past meals match "$_query".', style: textTheme.bodySmall);
+    } else {
+      body = ListView(
+        shrinkWrap: true,
+        children: [
+          for (final meal in _results)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                meal['meal_name']?.toString() ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${amount(meal, 'calories')} kcal · P ${amount(meal, 'protein')}g · '
+                'C ${amount(meal, 'carbs')}g · F ${amount(meal, 'fat')}g',
+                style: textTheme.bodySmall,
+              ),
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Log this meal',
+                icon: const Icon(Icons.add_circle),
+                onSelected: (type) => Navigator.pop(context, (meal, type)),
+                itemBuilder: (_) => [
+                  for (final type in ['breakfast', 'lunch', 'dinner', 'snack'])
+                    PopupMenuItem(value: type, child: Text('Log as $type')),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
+    return AlertDialog(
+      title: const Text('Search past meals'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              autofocus: true,
+              onChanged: _onChanged,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'e.g. chicken',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Flexible(child: body),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+      ],
+    );
+  }
+}
+
 class _MealDialog extends StatefulWidget {
   const _MealDialog();
 
@@ -423,6 +579,9 @@ class _MealDialog extends StatefulWidget {
 }
 
 class _MealDialogState extends State<_MealDialog> {
+  static const _mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+  final _api = ApiClient();
   final _name = TextEditingController();
   final _calories = TextEditingController(text: '0');
   final _protein = TextEditingController(text: '0');
@@ -430,12 +589,87 @@ class _MealDialogState extends State<_MealDialog> {
   final _fat = TextEditingController(text: '0');
   String _type = 'breakfast';
 
+  Timer? _debounce;
+  List<Map<String, dynamic>> _suggestions = [];
+  String _lastQuery = '';
+
   @override
   void dispose() {
+    _debounce?.cancel();
     for (final c in [_name, _calories, _protein, _carbs, _fat]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Waits for a pause in typing before asking the backend for past meals.
+  void _onNameChanged(String text) {
+    _debounce?.cancel();
+    final query = text.trim();
+    if (query.isEmpty) {
+      _lastQuery = '';
+      setState(() => _suggestions = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(query));
+  }
+
+  Future<void> _search(String query) async {
+    _lastQuery = query;
+    try {
+      final meals = await _api.searchMeals(query);
+      // Drop responses for a query the user has already typed past.
+      if (mounted && query == _lastQuery) setState(() => _suggestions = meals);
+    } on ApiException {
+      // Suggestions are a convenience; manual entry still works without them.
+    }
+  }
+
+  /// Fills the form with a past meal's name, type, and macros.
+  void _useSuggestion(Map<String, dynamic> meal) {
+    String amount(String key) => (meal[key] as num? ?? 0).round().toString();
+    _debounce?.cancel();
+    _lastQuery = '';
+    setState(() {
+      _name.text = meal['meal_name']?.toString() ?? '';
+      final type = meal['meal_type']?.toString();
+      if (_mealTypes.contains(type)) _type = type!;
+      _calories.text = amount('calories');
+      _protein.text = amount('protein');
+      _carbs.text = amount('carbs');
+      _fat.text = amount('fat');
+      _suggestions = [];
+    });
+  }
+
+  Widget _buildSuggestions() {
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final meal in _suggestions)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.history, size: 20),
+              title: Text(
+                meal['meal_name']?.toString() ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${formatAmount(meal['calories'] as num? ?? 0)} kcal · '
+                'P ${formatAmount(meal['protein'] as num? ?? 0)}g · '
+                'C ${formatAmount(meal['carbs'] as num? ?? 0)}g · '
+                'F ${formatAmount(meal['fat'] as num? ?? 0)}g',
+                style: textTheme.bodySmall,
+              ),
+              onTap: () => _useSuggestion(meal),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -448,10 +682,20 @@ class _MealDialogState extends State<_MealDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            field(_name, 'Meal name'),
+            TextField(
+              controller: _name,
+              autofocus: true,
+              onChanged: _onNameChanged,
+              decoration: const InputDecoration(
+                labelText: 'Meal name',
+                hintText: 'Type to search past meals',
+              ),
+            ),
+            if (_suggestions.isNotEmpty) _buildSuggestions(),
             DropdownButtonFormField<String>(
+              key: ValueKey(_type), // rebuilds when a suggestion sets the type
               initialValue: _type,
-              items: ['breakfast', 'lunch', 'dinner', 'snack']
+              items: _mealTypes
                   .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                   .toList(),
               onChanged: (value) => setState(() => _type = value!),

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
 from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record, Body_Weight, Program_Exercise_Override
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -155,7 +155,6 @@ def get_most_common_meals(user_id: UUID = Depends(get_curr_user), db: Session = 
         }) #adds each meal to the obj
     return most_common
     
-    
 #endpoint to add a meal from user
 @app.post('/nutrition/create-meal', response_model=Create_Meal_Out, status_code=status.HTTP_201_CREATED)
 def create_meal(body: Create_Meal_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
@@ -189,6 +188,31 @@ def nutrition_goal(body: Create_Nutrition_Goal_In, user_id: UUID = Depends(get_c
         db.commit()
     db.refresh(nutrition_goal)
     return nutrition_goal
+#endpoint for the user to search for meals that they have eaten before-- matches by name from letters they searched
+#it returns the possible matches
+@app.get('/nutrition/search-meal', response_model=Search_Meal_Out)
+def search_meal(meal_name: str,user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    matches = {'meals': []} #append to the list if there were matches from the db
+    if meal_name.strip() == '': return matches
+    possible_meals = db.scalars(select(Meal).
+                                where(Meal.meal_name.ilike(f'%{meal_name.strip()}%'),Meal.user_id==user_id)
+                                .order_by(Meal.created_at.desc()).limit(12)).all()
+    
+    seen = set() #since same meal can be used more than once we use the set for fast lookup to see if used already
+    for meal in possible_meals:
+        key = meal.meal_name.strip().lower() #so its generalized-- not based on the exact typing
+        if key in seen: continue
+
+        seen.add(key)
+        matches['meals'].append({
+            'meal_name': meal.meal_name,
+            'meal_type': meal.meal_type,
+            'calories': meal.calories,
+            'carbs': meal.carbs,
+            'fat': meal.fat,
+            'protein': meal.protein
+        })
+    return matches
 
 #****Barcode scanning section of nutrition ******
 
