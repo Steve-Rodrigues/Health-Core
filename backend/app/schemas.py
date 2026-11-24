@@ -393,3 +393,38 @@ class Sleep_Array_Main(BaseModel):
     duration_hours: float
 class Send_Sleep_Welcome_Out(BaseModel):
     sleep_history: list[Sleep_Array_Main] = []
+
+#format to send the last 30 days of sleep to the client
+class Sleep_Array_30_Days(BaseModel):
+    id: UUID
+    sleep_date: date
+    bed_time: time
+    wake_time: time
+    duration_hours: float
+    quality: int
+    notes: str
+    model_config = ConfigDict(from_attributes=True)
+class Sleep_30_Days(BaseModel):
+    logs: list[Sleep_Array_30_Days] = []
+
+#one night in the sleep summary chart
+class Sleep_Summary_Night(BaseModel):
+    sleep_date: date
+    duration_hours: float
+    quality: int
+    met_goal: bool | None = None #None when the user has no sleep goal set
+#format to send the sleep dashboard stats for the last 7 or 30 days
+class Sleep_Summary_Out(BaseModel):
+    days: int
+    start_date: date
+    nights_logged: int
+    avg_duration_hours: float | None = None
+    sleep_goal_hours: float | None = None
+    avg_quality: float | None = None
+    nights_meeting_goal: int | None = None
+    sleep_debt_hours: float | None = None
+    logging_streak: int
+    avg_bed_time: str | None = None #"HH:MM"
+    avg_wake_time: str | None = None #"HH:MM"
+    bed_time_consistency_mins: int | None = None
+    nights: list[Sleep_Summary_Night] = []

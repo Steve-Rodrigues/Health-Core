@@ -8,8 +8,8 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Date, cast, select, func, exists
-from statistics import median
-from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out, Send_Workouts_Welcome_Out, Send_Sleep_Welcome_Out
+from statistics import median, pstdev
+from app.schemas import User_Signup_In, User_Signup_Out, User_Login_Out, User_Profile_Survey, User_Goals_Update, Nutrition_Summary_Out, Create_Meal_Out, Create_Meal_In, Create_Nutrition_Goal_In, Create_Nutrition_Goal_Out, Log_Sleep_In, Log_Sleep_Out,Start_Workout_Out ,Exercise_Data_In,Exercise_Data_Out, Workout_Summary_Out, Finalize_Workout_In,Top_3_Programs_Out,Survey_Results_In, Program_In, My_Program_Out, Manually_Enter_Barcode_Food_In, Logging_Barcode_Food_Out, Log_Meal_In,Scan_Barcode_Food_Out,Send_Weekly_Lifts_Out,Newest_PRs,Week_Workout_Out,Most_Common_Meals,Program_Summary_Out,Exercise_List_Out,Personal_Record_In,Finish_Workout_In,Start_Workout_In, Body_Weight_In, Body_Weight_Out, Workout_History_Out, Swap_Exercise_In, Search_Meal_In, Search_Meal_Out, Send_Workouts_Welcome_Out, Send_Sleep_Welcome_Out, Sleep_30_Days, Sleep_Array_30_Days, Sleep_Summary_Out
 from app.database import get_db #dependency for db operations(creates a session) and gives us user id from token payload
 from app.models import User, Meal, User_Goal_Nutrition, Sleep, Workout, Exercise, Program_Exercise, Program, User_Program, Workout_Set, Barcode_Cache, Personal_Record, Body_Weight, Program_Exercise_Override
 from app.helper_funcs import get_nutrition_stats, get_equipment_level, score_program, Experience_Buckets, Equipment_Buckets, normalize_barcode, fetch_barcode, close_stale_workouts
@@ -347,6 +347,129 @@ def get_sleep_stats(current_date: date, user_id: UUID = Depends(get_curr_user), 
         summary['sleep_history'].append({'sleep_date':sleep.sleep_date, 'duration_hours': round(sleep.duration_mins/60,1)})
     return summary
 
+#endpoint to delete a sleep record
+@app.delete('/sleep/{sleep_id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_sleep_record(sleep_id: UUID, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    sleep = db.scalar(select(Sleep).where(Sleep.user_id==user_id, Sleep.id==sleep_id))
+    if sleep is None: raise HTTPException(404, detail='Sleep record not found')
+    #otherwise we delete
+    try:
+        db.delete(sleep)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(500, detail='Could not delete the record')
+#endpoint to return the last 30 days of sleep to the user
+@app.get('/sleep/logs', response_model=Sleep_30_Days)
+def get_last_30_days_sleep(end_date: date, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    first_day = end_date - timedelta(days=30) #gets the date for 30 days ago
+    all_sleeps = db.scalars(select(Sleep)
+                            .where(Sleep.user_id==user_id,Sleep.sleep_date<=end_date, Sleep.sleep_date > first_day)
+                            .order_by(Sleep.sleep_date.desc())).all()
+    summary = {'logs': []} #going to be what we return
+    for sleep in all_sleeps:
+        hours = round(sleep.duration_mins / 60,2)
+        summary['logs'].append({
+            'id': sleep.id,
+            'sleep_date': sleep.sleep_date,
+            'bed_time': sleep.bed_time,
+            'wake_time': sleep.wake_time,
+            'quality': sleep.quality,
+            'notes': sleep.notes if sleep.notes is not None else '',
+            'duration_hours': hours
+        })
+    return summary
+#endpoint to update a previous sleep record
+@app.put('/sleep/{sleep_id}', response_model=Sleep_Array_30_Days)
+def update_sleep_record(sleep_id: UUID, body: Log_Sleep_In, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    sleep = db.scalar(select(Sleep).where(Sleep.user_id==user_id, Sleep.id == sleep_id))
+    if sleep is None: raise HTTPException(404, detail='Sleep record does not exist')
+    sleep.sleep_date = body.wake_date
+    sleep.bed_time = body.bed_time
+    sleep.wake_time = body.wake_time
+    sleep.quality = body.quality
+    sleep.notes = body.notes if body.notes is not None else ''
+    #recalculate the duration the same way as log_sleep since the times may have changed
+    start_date_time = datetime.combine(body.wake_date, body.bed_time)
+    end_date_time = datetime.combine(body.wake_date, body.wake_time)
+    if start_date_time >= end_date_time:
+        start_date_time -= timedelta(days=1) #went to bed the night before
+    sleep.duration_mins = int((end_date_time-start_date_time).total_seconds()//60)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, 'You already logged sleep for that date')
+    db.refresh(sleep)
+    #same shape as each entry in /sleep/logs
+    return {
+        'id': sleep.id,
+        'sleep_date': sleep.sleep_date,
+        'bed_time': sleep.bed_time,
+        'wake_time': sleep.wake_time,
+        'quality': sleep.quality,
+        'notes': sleep.notes if sleep.notes is not None else '',
+        'duration_hours': round(sleep.duration_mins / 60, 1)
+    }
+
+#endpoint for the sleep dashboard stats over the last 7 or 30 days (ending on current_date)
+@app.get('/sleep/summary', response_model=Sleep_Summary_Out)
+def get_sleep_summary(current_date: date, days: int, user_id: UUID = Depends(get_curr_user), db: Session = Depends(get_db)):
+    if days not in (7, 30): raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail='days must be 7 or 30')
+    start_date = current_date - timedelta(days=days-1) #includes current_date so 7 days = today + the 6 before it
+    user = db.scalar(select(User).where(User.id==user_id))
+    goal = user.sleep_goal if user is not None else None #hours, None if the user never set one
+    sleeps = db.scalars(select(Sleep)
+                        .where(Sleep.user_id==user_id, Sleep.sleep_date>=start_date, Sleep.sleep_date<=current_date)
+                        .order_by(Sleep.sleep_date.asc())).all()
+    summary = {
+        'days': days,
+        'start_date': start_date,
+        'nights_logged': len(sleeps),
+        'sleep_goal_hours': goal,
+        'logging_streak': 0,
+        'nights': []
+    } #any stat left out stays None, which the frontend shows as --
+
+    #streak isnt limited to the range so it gets its own query (just the dates)
+    logged_dates = set(db.scalars(select(Sleep.sleep_date).where(Sleep.user_id==user_id, Sleep.sleep_date<=current_date)).all())
+    day = current_date if current_date in logged_dates else current_date - timedelta(days=1) #today not logged yet doesnt break the streak
+    while day in logged_dates:
+        summary['logging_streak'] += 1
+        day -= timedelta(days=1)
+
+    if not sleeps: return summary #nothing logged in this range so the rest stays empty
+
+    hours_list = [sleep.duration_mins / 60 for sleep in sleeps]
+    summary['avg_duration_hours'] = round(sum(hours_list) / len(hours_list), 1)
+    summary['avg_quality'] = round(sum(sleep.quality for sleep in sleeps) / len(sleeps), 1)
+    if goal is not None:
+        summary['nights_meeting_goal'] = sum(1 for hours in hours_list if hours >= goal)
+        summary['sleep_debt_hours'] = round(sum(max(0, goal - hours) for hours in hours_list), 1) #only nights under the goal add debt
+
+    #bed times wrap around midnight (23:30 and 00:30 should average to 00:00, not noon)
+    #so anything before noon counts as the next day by adding 24 hours of mins
+    bed_mins = []
+    for sleep in sleeps:
+        mins = sleep.bed_time.hour*60 + sleep.bed_time.minute
+        if mins < 12*60: mins += 24*60
+        bed_mins.append(mins)
+    wake_mins = [sleep.wake_time.hour*60 + sleep.wake_time.minute for sleep in sleeps]
+    avg_bed = round(sum(bed_mins) / len(bed_mins)) % (24*60) #back into a normal 0-24h time
+    avg_wake = round(sum(wake_mins) / len(wake_mins))
+    summary['avg_bed_time'] = f'{avg_bed//60:02d}:{avg_bed%60:02d}'
+    summary['avg_wake_time'] = f'{avg_wake//60:02d}:{avg_wake%60:02d}'
+    #how many mins the bed time usually strays from the average-- need 2+ nights to compare
+    if len(bed_mins) >= 2: summary['bed_time_consistency_mins'] = round(pstdev(bed_mins))
+
+    for sleep, hours in zip(sleeps, hours_list):
+        summary['nights'].append({
+            'sleep_date': sleep.sleep_date,
+            'duration_hours': round(hours, 1),
+            'quality': sleep.quality,
+            'met_goal': hours >= goal if goal is not None else None
+        })
+    return summary
 #*********************************** Lifting Section ***************************************
 
 #displaying workouts completed this week along with the days they were completed and the total workouts to do for a visual of workouts this week
