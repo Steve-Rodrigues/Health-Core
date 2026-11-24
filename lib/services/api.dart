@@ -474,6 +474,76 @@ class ApiClient {
     return _jsonMap(response);
   }
 
+  /// Sleep stats for the [days] days ending on [currentDate] (7 or 30).
+  Future<Map<String, dynamic>> getSleepSummary({
+    required DateTime currentDate,
+    required int days,
+  }) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/sleep/summary').replace(queryParameters: {
+          'current_date': _dateString(currentDate),
+          'days': '$days',
+        }),
+        headers: _headers(),
+      ),
+      action: 'loading your sleep summary',
+    );
+    return _jsonMap(response);
+  }
+
+  /// Sleep entries for the 30 days ending on [endDate], newest first.
+  Future<List<Map<String, dynamic>>> getSleepLogs({
+    required DateTime endDate,
+  }) async {
+    final response = await _request(
+      () => _client.get(
+        Uri.parse('$_baseUrl/sleep/logs')
+            .replace(queryParameters: {'end_date': _dateString(endDate)}),
+        headers: _headers(),
+      ),
+      action: 'loading your sleep history',
+    );
+    final logs = _jsonMap(response)['logs'] as List? ?? [];
+    return logs.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> updateSleep({
+    required String sleepId,
+    required DateTime wakeDate,
+    required String bedTime,
+    required String wakeTime,
+    required int quality,
+    required String notes,
+  }) async {
+    final response = await _request(
+      () => _client.put(
+        Uri.parse('$_baseUrl/sleep/$sleepId'),
+        headers: _headers(),
+        body: jsonEncode({
+          'wake_date': _dateString(wakeDate),
+          'bed_time': bedTime,
+          'wake_time': wakeTime,
+          'quality': quality,
+          'notes': notes,
+        }),
+      ),
+      action: 'updating your sleep entry',
+    );
+    return _jsonMap(response);
+  }
+
+  Future<void> deleteSleep(String sleepId) async {
+    final response = await _request(
+      () => _client.delete(
+        Uri.parse('$_baseUrl/sleep/$sleepId'),
+        headers: _headers(),
+      ),
+      action: 'deleting your sleep entry',
+    );
+    _ensureSuccess(response);
+  }
+
   /// Starts (or resumes) today's workout. Sends the moment the user's local
   /// day began, as UTC, so the backend's one-workout-per-day check uses the
   /// user's day instead of the server's (same idea as getWeeklyWorkouts).

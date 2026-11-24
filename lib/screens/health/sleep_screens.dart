@@ -874,10 +874,10 @@ class _SleepLogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final date = _parseDate(log['sleep_date']);
-    final minutes = log['duration_mins'] as int? ?? 0;
+    final hours = (log['duration_hours'] as num?)?.toDouble() ?? 0;
     final quality = log['quality'] as int? ?? 0;
     final notes = (log['notes'] as String?)?.trim() ?? '';
-    final metGoal = goalHours != null && minutes >= goalHours! * 60;
+    final metGoal = goalHours != null && hours >= goalHours!;
 
     return Material(
       color: _paleBlue,
@@ -923,7 +923,7 @@ class _SleepLogTile extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            _hoursAndMinutes(minutes),
+                            _formatHours(hours),
                             style: const TextStyle(
                               color: _navy,
                               fontSize: 17,
